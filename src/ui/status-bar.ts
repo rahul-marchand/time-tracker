@@ -32,7 +32,7 @@ export class StatusBar {
 	private render(): void {
 		const { status, projectId } = this.timer;
 		if (status === 'idle') {
-			this.el.setText('⏱ Start timer');
+			this.el.setText('⏱ No timer');
 			this.el.removeClass('is-running');
 		} else {
 			const project = this.store.getProject(projectId!);
