@@ -150,3 +150,226 @@
 .time-tracker-manual-modal h3 {
 	margin: 0 0 1em 0;
 }
+
+/* ============================================
+   SIDEBAR VIEW
+   ============================================ */
+
+.time-tracker-sidebar {
+	padding: 16px;
+	height: 100%;
+	display: flex;
+	flex-direction: column;
+	gap: 20px;
+}
+
+/* Timer Section */
+.time-tracker-sidebar .timer-section {
+	text-align: center;
+	padding: 16px 0;
+}
+
+.time-tracker-sidebar .timer-idle-text {
+	color: var(--text-muted);
+	margin-bottom: 16px;
+	font-size: 0.9em;
+}
+
+.time-tracker-sidebar .timer-project-list {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+}
+
+.time-tracker-sidebar .timer-start-btn {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: 8px;
+	padding: 12px 16px;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 8px;
+	background: var(--background-primary);
+	cursor: pointer;
+	font-size: 0.95em;
+	color: var(--text-normal);
+	transition: all 0.15s ease;
+}
+
+.time-tracker-sidebar .timer-start-btn:hover {
+	background: var(--background-secondary);
+	transform: translateY(-1px);
+}
+
+.time-tracker-sidebar .timer-header {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: 8px;
+	margin-bottom: 8px;
+}
+
+.time-tracker-sidebar .timer-project-name {
+	font-weight: 600;
+	font-size: 0.95em;
+}
+
+.time-tracker-sidebar .timer-display {
+	font-size: 2.5em;
+	font-weight: 700;
+	font-family: var(--font-monospace);
+	letter-spacing: -0.02em;
+	padding: 16px 0;
+	color: var(--text-normal);
+}
+
+.time-tracker-sidebar .timer-display.running {
+	color: var(--text-accent);
+}
+
+.time-tracker-sidebar .timer-actions {
+	display: flex;
+	gap: 8px;
+	justify-content: center;
+	position: relative;
+}
+
+.time-tracker-sidebar .timer-actions button {
+	padding: 8px 20px;
+	border-radius: 6px;
+	font-size: 0.9em;
+}
+
+/* Switch menu */
+.time-tracker-sidebar .switch-menu {
+	position: absolute;
+	top: 100%;
+	left: 50%;
+	transform: translateX(-50%);
+	margin-top: 8px;
+	background: var(--background-primary);
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 8px;
+	padding: 8px;
+	box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+	z-index: 10;
+	min-width: 150px;
+}
+
+.time-tracker-sidebar .switch-btn {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	width: 100%;
+	padding: 8px 12px;
+	border: none;
+	border-radius: 6px;
+	background: transparent;
+	cursor: pointer;
+	font-size: 0.9em;
+	color: var(--text-normal);
+}
+
+.time-tracker-sidebar .switch-btn:hover {
+	background: var(--background-secondary);
+}
+
+/* Today Section */
+.time-tracker-sidebar .today-section {
+	flex: 1;
+	display: flex;
+	flex-direction: column;
+}
+
+.time-tracker-sidebar .today-section h3 {
+	font-size: 0.8em;
+	font-weight: 600;
+	text-transform: uppercase;
+	letter-spacing: 0.05em;
+	color: var(--text-muted);
+	margin: 0 0 12px 0;
+}
+
+/* Progress bar */
+.time-tracker-sidebar .progress-container {
+	margin-bottom: 16px;
+}
+
+.time-tracker-sidebar .progress-bar {
+	height: 8px;
+	background: var(--background-modifier-border);
+	border-radius: 4px;
+	overflow: hidden;
+}
+
+.time-tracker-sidebar .progress-fill {
+	height: 100%;
+	background: var(--text-accent);
+	border-radius: 4px;
+	transition: width 0.3s ease;
+}
+
+.time-tracker-sidebar .progress-text {
+	text-align: right;
+	font-size: 0.85em;
+	color: var(--text-muted);
+	margin-top: 4px;
+}
+
+/* Timeline */
+.time-tracker-sidebar .timeline {
+	flex: 1;
+	overflow-y: auto;
+}
+
+.time-tracker-sidebar .timeline-row {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	padding: 10px 0;
+	border-bottom: 1px solid var(--background-modifier-border);
+}
+
+.time-tracker-sidebar .timeline-row:last-child {
+	border-bottom: none;
+}
+
+.time-tracker-sidebar .timeline-row.current {
+	background: var(--background-secondary);
+	margin: 0 -16px;
+	padding: 10px 16px;
+	border-radius: 6px;
+}
+
+.time-tracker-sidebar .timeline-name {
+	flex: 1;
+	font-size: 0.9em;
+}
+
+.time-tracker-sidebar .timeline-time {
+	font-size: 0.85em;
+	color: var(--text-muted);
+	font-family: var(--font-monospace);
+}
+
+.time-tracker-sidebar .no-sessions {
+	color: var(--text-muted);
+	font-style: italic;
+	text-align: center;
+	padding: 20px 0;
+}
+
+/* Color dot variants */
+.color-dot.large {
+	width: 14px;
+	height: 14px;
+}
+
+.color-dot.pulse {
+	animation: pulse 2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+	0%, 100% { opacity: 1; }
+	50% { opacity: 0.5; }
+}
