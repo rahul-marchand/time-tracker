@@ -1,0 +1,152 @@
+.time-tracker-status {
+	cursor: pointer;
+}
+
+.time-tracker-status.is-running {
+	color: var(--text-accent);
+	font-weight: 500;
+}
+
+/* Project Modal */
+.time-tracker-project-modal .modal-content {
+	padding: 1em;
+}
+
+.time-tracker-project-modal h3 {
+	margin: 0 0 1em 0;
+	font-size: 1.1em;
+}
+
+.time-tracker-project-modal .project-list {
+	display: flex;
+	flex-direction: column;
+	gap: 0.5em;
+}
+
+.time-tracker-project-modal .project-btn {
+	display: flex;
+	align-items: center;
+	gap: 0.75em;
+	width: 100%;
+	padding: 0.85em 1em;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 8px;
+	background: var(--background-primary);
+	cursor: pointer;
+	text-align: left;
+	font-size: 0.95em;
+	color: var(--text-normal);
+	transition: all 0.15s ease;
+}
+
+.time-tracker-project-modal .project-btn::before {
+	content: '';
+	width: 12px;
+	height: 12px;
+	border-radius: 50%;
+	background: var(--project-color, #888);
+	flex-shrink: 0;
+}
+
+.time-tracker-project-modal .project-btn:hover {
+	background: var(--background-secondary);
+	border-color: var(--background-modifier-border-hover);
+	transform: translateY(-1px);
+}
+
+.time-tracker-project-modal .project-btn:active {
+	transform: translateY(0);
+}
+
+.time-tracker-project-modal .actions {
+	display: flex;
+	gap: 0.5em;
+	margin: 1.25em 0;
+}
+
+.time-tracker-project-modal .actions button {
+	flex: 1;
+}
+
+.time-tracker-project-modal .switch-section {
+	margin-top: 1.5em;
+	padding-top: 1.25em;
+	border-top: 1px solid var(--background-modifier-border);
+}
+
+.time-tracker-project-modal .switch-section h4 {
+	margin: 0 0 0.75em 0;
+	font-size: 0.9em;
+	color: var(--text-muted);
+	font-weight: 500;
+}
+
+/* Stats Modal */
+.time-tracker-stats-modal h2 {
+	margin: 0 0 1em 0;
+}
+
+.time-tracker-stats-modal .stats-section {
+	margin: 1.5em 0;
+}
+
+.time-tracker-stats-modal .stats-section h3 {
+	margin: 0 0 0.5em 0;
+	font-size: 0.95em;
+	color: var(--text-muted);
+	font-weight: 600;
+	text-transform: uppercase;
+	letter-spacing: 0.03em;
+}
+
+.time-tracker-stats-modal .stats-list {
+	list-style: none;
+	padding: 0;
+	margin: 0;
+}
+
+.time-tracker-stats-modal .stats-list li {
+	padding: 0.5em 0;
+	display: flex;
+	align-items: center;
+	gap: 0.5em;
+	border-bottom: 1px solid var(--background-modifier-border);
+}
+
+.time-tracker-stats-modal .stats-list li:last-child {
+	border-bottom: none;
+}
+
+.time-tracker-stats-modal .stats-total {
+	font-weight: 600;
+	margin-top: 0.75em;
+	padding-top: 0.5em;
+}
+
+.time-tracker-stats-modal .muted {
+	color: var(--text-muted);
+	font-style: italic;
+}
+
+/* Shared */
+.color-dot {
+	display: inline-block;
+	width: 10px;
+	height: 10px;
+	border-radius: 50%;
+	flex-shrink: 0;
+}
+
+.color-input {
+	width: 50px !important;
+	height: 30px !important;
+	padding: 0 !important;
+	border: 1px solid var(--background-modifier-border) !important;
+	border-radius: 4px !important;
+	cursor: pointer;
+}
+
+/* Manual Entry Modal */
+.time-tracker-manual-modal h3 {
+	margin: 0 0 1em 0;
+}
