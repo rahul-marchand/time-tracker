@@ -24,7 +24,7 @@ export default class TimeTrackerPlugin extends Plugin {
 		this.timer.load(this.settings.timerState);
 
 		// Register sidebar view
-		this.registerView(VIEW_TYPE, (leaf) => new SidebarView(leaf, this.timer, this.store));
+		this.registerView(VIEW_TYPE, (leaf) => new SidebarView(leaf, this.timer, this.store, this));
 
 		this.statusBar = new StatusBar(this, this.timer, this.store);
 

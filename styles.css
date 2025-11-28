@@ -46,7 +46,7 @@
 	padding: 12px 16px;
 	text-align: center;
 	font-size: 0.85em;
-	font-weight: 500;
+	font-weight: 600;
 	color: var(--text-muted);
 	cursor: pointer;
 	transition: all 0.15s ease;
@@ -140,6 +140,30 @@
 	font-weight: 500;
 	font-size: 0.9em;
 	color: var(--text-normal);
+}
+
+.project-btn-add {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 24px;
+	height: 24px;
+	margin-left: auto;
+	border-radius: 4px;
+	color: var(--text-muted);
+	opacity: 0.5;
+	transition: all 0.15s ease;
+}
+
+.project-btn-add:hover {
+	opacity: 1;
+	background: var(--background-modifier-hover);
+	color: var(--text-normal);
+}
+
+.project-btn-add svg {
+	width: 14px;
+	height: 14px;
 }
 
 /* Timer Section - Running */
@@ -331,7 +355,7 @@
 	overflow-y: auto;
 	display: flex;
 	flex-direction: column;
-	gap: 24px;
+	gap: 16px;
 }
 
 .analytics-section {
@@ -372,9 +396,9 @@
 .week-chart {
 	display: flex;
 	gap: 6px;
-	height: 100px;
+	height: 80px;
 	align-items: flex-end;
-	padding: 8px 0;
+	padding: 4px 0;
 }
 
 .week-bar {
@@ -383,6 +407,7 @@
 	flex-direction: column;
 	align-items: center;
 	height: 100%;
+	position: relative;
 }
 
 .week-bar-fill {
@@ -458,6 +483,133 @@
 }
 
 /* ============================================
+   ANALYTICS TOGGLE
+   ============================================ */
+
+.analytics-toggle {
+	display: inline-flex;
+	gap: 1px;
+	padding: 2px;
+	background: var(--background-modifier-border);
+	border-radius: 4px;
+}
+
+.toggle-btn {
+	padding: 2px 6px;
+	border: none;
+	border-radius: 3px;
+	background: transparent;
+	color: var(--text-muted);
+	font-size: 0.7em;
+	font-weight: 600;
+	cursor: pointer;
+	transition: all 0.15s ease;
+}
+
+.toggle-btn:hover {
+	color: var(--text-normal);
+}
+
+.toggle-btn.active {
+	background: var(--background-primary);
+	color: var(--text-normal);
+}
+
+/* ============================================
+   STATS GRID
+   ============================================ */
+
+.stats-section {
+	padding-top: 0 !important;
+}
+
+.stats-grid {
+	display: flex;
+	gap: 8px;
+}
+
+.stat-item {
+	flex: 1;
+	padding: 8px 10px;
+	background: var(--background-secondary);
+	border-radius: 6px;
+	text-align: center;
+}
+
+.stat-value {
+	font-size: 1em;
+	font-weight: 600;
+	color: var(--text-normal);
+	font-family: var(--font-monospace);
+}
+
+.stat-label {
+	font-size: 0.65em;
+	color: var(--text-muted);
+	text-transform: uppercase;
+	letter-spacing: 0.03em;
+	margin-top: 2px;
+}
+
+/* ============================================
+   BAR CHART ENHANCEMENTS
+   ============================================ */
+
+/* Stacked bar */
+.week-bar-stack {
+	width: 100%;
+	display: flex;
+	flex-direction: column;
+	border-radius: 6px;
+	overflow: hidden;
+	background: var(--background-modifier-border);
+	margin-top: auto;
+	position: relative;
+	cursor: pointer;
+	transition: filter 0.15s ease;
+}
+
+.week-bar-stack:hover {
+	filter: brightness(1.1);
+}
+
+.stack-segment {
+	width: 100%;
+	flex-shrink: 0;
+}
+
+/* Tooltip - appears just above each bar */
+.week-bar-stack::after {
+	content: attr(data-tooltip);
+	position: absolute;
+	top: calc(50% - 10px);
+	left: 50%;
+	transform: translateX(-50%);
+	padding: 3px 6px;
+	background: var(--background-primary);
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 4px;
+	font-size: 0.7em;
+	font-family: var(--font-monospace);
+	white-space: nowrap;
+	color: var(--text-normal);
+	opacity: 0;
+	pointer-events: none;
+	transition: opacity 0.1s ease;
+	z-index: 10;
+	box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
+}
+
+.week-bar-stack:hover::after {
+	opacity: 1;
+}
+
+/* Month chart adjustments */
+.analytics-view .week-chart {
+	gap: 2px;
+}
+
+/* ============================================
    ANIMATIONS
    ============================================ */
 
@@ -514,7 +666,7 @@
 	}
 
 	.week-chart {
-		height: 80px;
+		height: 60px;
 	}
 }
 
@@ -552,7 +704,7 @@
 	}
 
 	.week-chart {
-		height: 120px;
+		height: 100px;
 	}
 }
 

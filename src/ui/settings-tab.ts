@@ -14,6 +14,22 @@ export class SettingsTab extends PluginSettingTab {
 		const { containerEl } = this;
 		containerEl.empty();
 
+		containerEl.createEl('h2', { text: 'General' });
+
+		new Setting(containerEl)
+			.setName('Streak target')
+			.setDesc('Minimum minutes per day to count towards streak')
+			.addText(text => {
+				text.inputEl.type = 'number';
+				text.inputEl.min = '1';
+				text.setValue(String(this.plugin.settings.streakTargetMins));
+				text.onChange(async v => {
+					const mins = parseInt(v) || 60;
+					this.plugin.settings.streakTargetMins = mins;
+					await this.plugin.saveSettings();
+				});
+			});
+
 		containerEl.createEl('h2', { text: 'Projects' });
 
 		for (const project of this.plugin.store.projects) {

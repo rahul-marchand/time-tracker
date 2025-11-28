@@ -1,22 +1,27 @@
-import { ItemView, WorkspaceLeaf, Menu, setIcon } from 'obsidian';
+import { ItemView, WorkspaceLeaf, Menu, setIcon, Modal, Setting } from 'obsidian';
 import { Timer } from '../timer';
 import { Store } from '../store';
 import { Session } from '../types';
+import type TimeTrackerPlugin from '../main';
 
 export const VIEW_TYPE = 'time-tracker-sidebar';
 
 type Tab = 'timer' | 'analytics';
+type AnalyticsMode = 'week' | 'month';
 
 export class SidebarView extends ItemView {
 	private timer: Timer;
 	private store: Store;
+	private plugin: TimeTrackerPlugin;
 	private interval: number | null = null;
 	private activeTab: Tab = 'timer';
+	private analyticsMode: AnalyticsMode = 'week';
 
-	constructor(leaf: WorkspaceLeaf, timer: Timer, store: Store) {
+	constructor(leaf: WorkspaceLeaf, timer: Timer, store: Store, plugin: TimeTrackerPlugin) {
 		super(leaf);
 		this.timer = timer;
 		this.store = store;
+		this.plugin = plugin;
 	}
 
 	getViewType(): string {
@@ -103,6 +108,13 @@ export class SidebarView extends ItemView {
 				const content = btn.createDiv('project-btn-content');
 				content.createSpan('project-btn-name').setText(project.name);
 
+				const addBtn = content.createDiv('project-btn-add');
+				setIcon(addBtn, 'plus');
+				addBtn.onClickEvent((e) => {
+					e.stopPropagation();
+					new QuickAddModal(this.app, this.store, project.id, project.name, () => this.render()).open();
+				});
+
 				btn.onClickEvent(() => this.timer.start(project.id));
 			}
 		} else {
@@ -178,60 +190,107 @@ export class SidebarView extends ItemView {
 	private renderAnalyticsView(container: HTMLElement): void {
 		const view = container.createDiv('analytics-view');
 
-		// Week summary
-		this.renderWeekChart(view);
-		this.renderProjectBreakdown(view);
+		this.renderChart(view);
+		this.renderStats(view);
+		this.renderProjectSummary(view);
 	}
 
-	private renderWeekChart(container: HTMLElement): void {
+	private renderChart(container: HTMLElement): void {
 		const section = container.createDiv('analytics-section');
 
-		const weekSessions = this.store.getWeekSessions();
-		const totalMs = this.store.getTotalTime(weekSessions);
+		const sessions = this.analyticsMode === 'week'
+			? this.store.getWeekSessions()
+			: this.store.getMonthSessions();
+		const totalMs = this.store.getTotalTime(sessions);
 
 		const header = section.createDiv('analytics-header');
-		header.createSpan('analytics-label').setText('This Week');
+
+		// Toggle in header
+		const toggle = header.createDiv('analytics-toggle');
+		const weekBtn = toggle.createEl('button', { cls: 'toggle-btn', text: 'W' });
+		if (this.analyticsMode === 'week') weekBtn.addClass('active');
+		weekBtn.onClickEvent(() => { this.analyticsMode = 'week'; this.render(); });
+
+		const monthBtn = toggle.createEl('button', { cls: 'toggle-btn', text: 'M' });
+		if (this.analyticsMode === 'month') monthBtn.addClass('active');
+		monthBtn.onClickEvent(() => { this.analyticsMode = 'month'; this.render(); });
+
 		header.createSpan('analytics-total').setText(this.formatTimeHM(totalMs));
 
-		// Get daily totals for the week
-		const dailyTotals = this.getDailyTotals();
-		const maxMs = Math.max(...dailyTotals.map(d => d.total), 1);
+		const dailyData = this.analyticsMode === 'week'
+			? this.getWeekDailyData()
+			: this.getMonthDailyData();
+		const maxMs = Math.max(...dailyData.map(d => d.total), 1);
 
 		const chart = section.createDiv('week-chart');
-		const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
-		dailyTotals.forEach((day, i) => {
+		dailyData.forEach((day) => {
 			const bar = chart.createDiv('week-bar');
-			const height = (day.total / maxMs) * 100;
+			if (day.isToday) bar.addClass('today');
 
-			const fill = bar.createDiv('week-bar-fill');
-			fill.style.height = `${Math.max(height, 2)}%`;
-			if (day.isToday) fill.addClass('today');
+			const stack = bar.createDiv('week-bar-stack');
+			stack.dataset.tooltip = this.formatTimeHM(day.total);
 
-			bar.createDiv('week-bar-label').setText(days[i]);
+			// Stacked segments by project
+			const heightPercent = (day.total / maxMs) * 100;
+			stack.style.height = `${Math.max(heightPercent, day.total > 0 ? 4 : 2)}%`;
+
+			if (day.total > 0) {
+				for (const seg of day.projects) {
+					const segment = stack.createDiv('stack-segment');
+					segment.style.height = `${(seg.time / day.total) * 100}%`;
+					segment.style.backgroundColor = seg.color;
+				}
+			}
+
+			bar.createDiv('week-bar-label').setText(day.label);
 		});
 	}
 
-	private renderProjectBreakdown(container: HTMLElement): void {
+	private renderStats(container: HTMLElement): void {
+		const section = container.createDiv('analytics-section stats-section');
+
+		const sessions = this.analyticsMode === 'week'
+			? this.store.getWeekSessions()
+			: this.store.getMonthSessions();
+		const totalMs = this.store.getTotalTime(sessions);
+		const daysInPeriod = this.analyticsMode === 'week' ? 7 : new Date().getDate();
+		const avgMs = totalMs / daysInPeriod;
+		const targetMs = this.plugin.settings.streakTargetMins * 60 * 1000;
+		const streak = this.store.getStreak(targetMs);
+
+		const stats = section.createDiv('stats-grid');
+
+		const avgStat = stats.createDiv('stat-item');
+		avgStat.createDiv('stat-value').setText(this.formatTimeHM(avgMs));
+		avgStat.createDiv('stat-label').setText('Daily Avg');
+
+		const streakStat = stats.createDiv('stat-item');
+		streakStat.createDiv('stat-value').setText(`${streak}`);
+		streakStat.createDiv('stat-label').setText(streak === 1 ? 'Day Streak' : 'Days Streak');
+	}
+
+	private renderProjectSummary(container: HTMLElement): void {
 		const section = container.createDiv('analytics-section');
 
 		const header = section.createDiv('analytics-header');
 		header.createSpan('analytics-label').setText('By Project');
 
-		const weekSessions = this.store.getWeekSessions();
-		const totalMs = this.store.getTotalTime(weekSessions);
+		const sessions = this.analyticsMode === 'week'
+			? this.store.getWeekSessions()
+			: this.store.getMonthSessions();
+		const totalMs = this.store.getTotalTime(sessions);
 
-		if (weekSessions.length === 0) {
-			section.createDiv('analytics-empty').setText('No data this week');
+		if (sessions.length === 0) {
+			section.createDiv('analytics-empty').setText('No data');
 			return;
 		}
 
-		const byProject = this.groupByProject(weekSessions);
+		const byProject = this.groupByProject(sessions);
 		const breakdown = section.createDiv('project-breakdown');
 
-		// Sort by time descending
 		const sorted = Object.entries(byProject)
-			.map(([id, sessions]) => ({ id, time: this.store.getTotalTime(sessions) }))
+			.map(([id, s]) => ({ id, time: this.store.getTotalTime(s) }))
 			.sort((a, b) => b.time - a.time);
 
 		for (const { id, time } of sorted) {
@@ -239,7 +298,6 @@ export class SidebarView extends ItemView {
 			const percent = totalMs > 0 ? (time / totalMs) * 100 : 0;
 
 			const row = breakdown.createDiv('breakdown-row');
-
 			const info = row.createDiv('breakdown-info');
 			const dot = info.createSpan('breakdown-dot');
 			dot.style.backgroundColor = project?.color ?? '#888';
@@ -253,11 +311,11 @@ export class SidebarView extends ItemView {
 		}
 	}
 
-	private getDailyTotals(): { total: number; isToday: boolean }[] {
+	private getWeekDailyData(): { label: string; total: number; isToday: boolean; projects: { color: string; time: number }[] }[] {
 		const today = new Date();
-		const dayOfWeek = (today.getDay() + 6) % 7; // Monday = 0
-
-		const result: { total: number; isToday: boolean }[] = [];
+		const dayOfWeek = (today.getDay() + 6) % 7;
+		const days = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
+		const result: { label: string; total: number; isToday: boolean; projects: { color: string; time: number }[] }[] = [];
 
 		for (let i = 0; i < 7; i++) {
 			const date = new Date(today);
@@ -269,14 +327,41 @@ export class SidebarView extends ItemView {
 
 			const sessions = this.store.getSessionsInRange(date, nextDate);
 			const total = this.store.getTotalTime(sessions);
+			const projects = this.getProjectBreakdown(sessions);
 
-			result.push({
-				total,
-				isToday: i === dayOfWeek
-			});
+			result.push({ label: days[i], total, isToday: i === dayOfWeek, projects });
 		}
 
 		return result;
+	}
+
+	private getMonthDailyData(): { label: string; total: number; isToday: boolean; projects: { color: string; time: number }[] }[] {
+		const today = new Date();
+		const daysInMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate();
+		const result: { label: string; total: number; isToday: boolean; projects: { color: string; time: number }[] }[] = [];
+
+		for (let i = 1; i <= daysInMonth; i++) {
+			const date = new Date(today.getFullYear(), today.getMonth(), i);
+			const nextDate = new Date(today.getFullYear(), today.getMonth(), i + 1);
+
+			const sessions = this.store.getSessionsInRange(date, nextDate);
+			const total = this.store.getTotalTime(sessions);
+			const projects = this.getProjectBreakdown(sessions);
+
+			result.push({ label: i.toString(), total, isToday: i === today.getDate(), projects });
+		}
+
+		return result;
+	}
+
+	private getProjectBreakdown(sessions: Session[]): { color: string; time: number }[] {
+		const byProject = this.groupByProject(sessions);
+		return Object.entries(byProject)
+			.map(([id, s]) => ({
+				color: this.store.getProject(id)?.color ?? '#888',
+				time: this.store.getTotalTime(s)
+			}))
+			.sort((a, b) => b.time - a.time);
 	}
 
 	private showSwitchMenu(anchor: HTMLElement, evt: MouseEvent): void {
@@ -324,5 +409,64 @@ export class SidebarView extends ItemView {
 		const b = parseInt(hex.slice(5, 7), 16);
 		const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
 		return luminance > 0.5 ? '#2e2e2e' : '#ffffff';
+	}
+}
+
+class QuickAddModal extends Modal {
+	private store: Store;
+	private projectId: string;
+	private projectName: string;
+	private onSave: () => void;
+	private minutes = 30;
+
+	constructor(app: import('obsidian').App, store: Store, projectId: string, projectName: string, onSave: () => void) {
+		super(app);
+		this.store = store;
+		this.projectId = projectId;
+		this.projectName = projectName;
+		this.onSave = onSave;
+	}
+
+	onOpen(): void {
+		const { contentEl } = this;
+		contentEl.addClass('quick-add-modal');
+
+		contentEl.createEl('h3', { text: `Add time to ${this.projectName}` });
+
+		new Setting(contentEl)
+			.setName('Minutes')
+			.addText(text => {
+				text.inputEl.type = 'number';
+				text.inputEl.min = '1';
+				text.setValue('30');
+				text.onChange(v => this.minutes = parseInt(v) || 30);
+				text.inputEl.focus();
+				text.inputEl.select();
+			});
+
+		new Setting(contentEl)
+			.addButton(btn => {
+				btn.setButtonText('Add');
+				btn.setCta();
+				btn.onClick(() => this.save());
+			});
+	}
+
+	private async save(): Promise<void> {
+		const end = new Date();
+		const start = new Date(end.getTime() - this.minutes * 60 * 1000);
+
+		await this.store.addSession({
+			project: this.projectId,
+			start: start.toISOString(),
+			end: end.toISOString(),
+		});
+
+		this.onSave();
+		this.close();
+	}
+
+	onClose(): void {
+		this.contentEl.empty();
 	}
 }

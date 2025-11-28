@@ -108,11 +108,38 @@ export class Store {
 
 	getWeekSessions(): Session[] {
 		const now = new Date();
+		const dayOfWeek = (now.getDay() + 6) % 7; // Monday = 0
 		const start = new Date(now);
-		start.setDate(now.getDate() - now.getDay());
+		start.setDate(now.getDate() - dayOfWeek);
 		start.setHours(0, 0, 0, 0);
 		const end = new Date(start);
 		end.setDate(end.getDate() + 7);
 		return this.getSessionsInRange(start, end);
+	}
+
+	getMonthSessions(): Session[] {
+		const now = new Date();
+		const start = new Date(now.getFullYear(), now.getMonth(), 1);
+		const end = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+		return this.getSessionsInRange(start, end);
+	}
+
+	getStreak(targetMs: number): number {
+		const today = new Date();
+		today.setHours(0, 0, 0, 0);
+		let streak = 0;
+		let checkDate = new Date(today);
+		checkDate.setDate(checkDate.getDate() - 1); // Start from yesterday
+
+		while (true) {
+			const nextDate = new Date(checkDate);
+			nextDate.setDate(checkDate.getDate() + 1);
+			const sessions = this.getSessionsInRange(checkDate, nextDate);
+			const total = this.getTotalTime(sessions);
+			if (total < targetMs) break;
+			streak++;
+			checkDate.setDate(checkDate.getDate() - 1);
+		}
+		return streak;
 	}
 }
