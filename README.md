@@ -20,3 +20,7 @@ Simple time tracking for Obsidian.
 - Click + to add minutes manually
 - Click status bar to open sidebar
 - Configure projects and streak target in Settings → Time Tracker
+
+---
+
+![meme](meme.webp)
