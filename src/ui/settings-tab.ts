@@ -1,6 +1,6 @@
-import { App, PluginSettingTab, Setting } from 'obsidian';
+import { App, PluginSettingTab, Setting, setIcon } from 'obsidian';
 import type TimeTrackerPlugin from '../main';
-import { Project } from '../types';
+import { Project, AVAILABLE_ICONS } from '../types';
 
 export class SettingsTab extends PluginSettingTab {
 	plugin: TimeTrackerPlugin;
@@ -30,6 +30,7 @@ export class SettingsTab extends PluginSettingTab {
 						id,
 						name: 'New Project',
 						color: this.randomColor(),
+						icon: 'folder',
 					});
 					this.display();
 				});
@@ -41,9 +42,21 @@ export class SettingsTab extends PluginSettingTab {
 
 		setting.setName(project.name);
 
-		const dot = setting.nameEl.createSpan({ cls: 'color-dot' });
-		dot.style.backgroundColor = project.color;
-		setting.nameEl.prepend(dot);
+		const iconSpan = setting.nameEl.createSpan({ cls: 'project-icon' });
+		setIcon(iconSpan, project.icon || 'folder');
+		setting.nameEl.prepend(iconSpan);
+
+		setting.addDropdown(dropdown => {
+			for (const icon of AVAILABLE_ICONS) {
+				dropdown.addOption(icon, icon);
+			}
+			dropdown.setValue(project.icon || 'folder');
+			dropdown.onChange(async v => {
+				await this.plugin.store.updateProject(project.id, { icon: v });
+				iconSpan.empty();
+				setIcon(iconSpan, v);
+			});
+		});
 
 		setting.addText(text => {
 			text.setValue(project.name);
@@ -59,7 +72,6 @@ export class SettingsTab extends PluginSettingTab {
 			text.setValue(project.color);
 			text.onChange(async v => {
 				await this.plugin.store.updateProject(project.id, { color: v });
-				dot.style.backgroundColor = v;
 			});
 		});
 

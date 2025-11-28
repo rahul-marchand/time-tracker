@@ -1,4 +1,4 @@
-import { ItemView, WorkspaceLeaf, Menu } from 'obsidian';
+import { ItemView, WorkspaceLeaf, Menu, setIcon } from 'obsidian';
 import { Timer } from '../timer';
 import { Store } from '../store';
 import { Session } from '../types';
@@ -95,12 +95,13 @@ export class SidebarView extends ItemView {
 			for (const project of this.store.projects) {
 				const btn = projectList.createEl('button', { cls: 'project-btn' });
 				btn.style.setProperty('--project-color', project.color);
+				btn.style.setProperty('--icon-color', this.getContrastColor(project.color));
 
 				const icon = btn.createDiv('project-btn-icon');
-				icon.style.backgroundColor = project.color;
-				icon.setText('▶');
+				setIcon(icon, project.icon || 'play');
 
-				btn.createSpan('project-btn-name').setText(project.name);
+				const content = btn.createDiv('project-btn-content');
+				content.createSpan('project-btn-name').setText(project.name);
 
 				btn.onClickEvent(() => this.timer.start(project.id));
 			}
@@ -315,5 +316,13 @@ export class SidebarView extends ItemView {
 		const m = mins % 60;
 		if (h > 0) return `${h}h ${m}m`;
 		return `${m}m`;
+	}
+
+	private getContrastColor(hex: string): string {
+		const r = parseInt(hex.slice(1, 3), 16);
+		const g = parseInt(hex.slice(3, 5), 16);
+		const b = parseInt(hex.slice(5, 7), 16);
+		const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+		return luminance > 0.5 ? '#2e2e2e' : '#ffffff';
 	}
 }

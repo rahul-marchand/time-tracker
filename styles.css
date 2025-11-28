@@ -89,59 +89,61 @@
 
 .project-btn {
 	display: flex;
-	align-items: center;
-	gap: 14px;
+	align-items: stretch;
 	width: 100%;
-	padding: 16px 18px;
+	padding: 0;
+	margin: 0;
 	border: none;
-	border-radius: 12px;
-	background: linear-gradient(
-		135deg,
-		color-mix(in srgb, var(--project-color) 12%, var(--background-primary)),
-		color-mix(in srgb, var(--project-color) 6%, var(--background-primary))
-	);
+	border-radius: 8px;
+	background: transparent;
 	cursor: pointer;
-	transition: all 0.2s ease;
 	text-align: left;
-	box-shadow: 0 2px 4px rgba(0, 0, 0, 0.04);
+	box-shadow: 3px 3px 0 0 color-mix(in srgb, var(--project-color) 60%, #000);
+	transition: transform 0.15s ease, box-shadow 0.15s ease;
 }
 
 .project-btn:hover {
-	transform: translateY(-2px);
-	box-shadow: 0 4px 12px color-mix(in srgb, var(--project-color) 25%, transparent);
+	transform: translate(-2px, -2px);
+	box-shadow: 5px 5px 0 0 color-mix(in srgb, var(--project-color) 60%, #000);
 }
 
 .project-btn:active {
-	transform: translateY(0);
+	transform: translate(1px, 1px);
+	box-shadow: 1px 1px 0 0 color-mix(in srgb, var(--project-color) 60%, #000);
 }
 
 .project-btn-icon {
-	width: 40px;
-	height: 40px;
-	border-radius: 10px;
 	display: flex;
 	align-items: center;
 	justify-content: center;
-	color: white;
-	font-size: 14px;
-	flex-shrink: 0;
-	box-shadow: 0 2px 6px color-mix(in srgb, var(--project-color) 40%, transparent);
+	width: 44px;
+	border-radius: 8px 0 0 8px;
+	background: var(--project-color);
+	color: var(--icon-color);
+}
+
+.project-btn-icon svg {
+	width: 18px;
+	height: 18px;
+}
+
+.project-btn-content {
+	flex: 1;
+	display: flex;
+	align-items: center;
+	padding: 12px 14px;
+	border-radius: 0 8px 8px 0;
+	background: color-mix(in srgb, var(--project-color) 15%, var(--background-primary));
 }
 
 .project-btn-name {
-	font-weight: 600;
-	font-size: 1em;
+	font-weight: 500;
+	font-size: 0.9em;
 	color: var(--text-normal);
-	flex: 1;
 }
 
 /* Timer Section - Running */
 .timer-section.running {
-	background: linear-gradient(
-		to bottom,
-		color-mix(in srgb, var(--active-color) 8%, transparent),
-		transparent
-	);
 	text-align: center;
 }
 
