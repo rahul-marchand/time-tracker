@@ -128,8 +128,17 @@ export class Store {
 		const today = new Date();
 		today.setHours(0, 0, 0, 0);
 		let streak = 0;
+
+		// Check today first
+		const tomorrow = new Date(today);
+		tomorrow.setDate(today.getDate() + 1);
+		const todaySessions = this.getSessionsInRange(today, tomorrow);
+		const todayTotal = this.getTotalTime(todaySessions);
+		if (todayTotal >= targetMs) streak++;
+
+		// Count consecutive days from yesterday backwards
 		let checkDate = new Date(today);
-		checkDate.setDate(checkDate.getDate() - 1); // Start from yesterday
+		checkDate.setDate(checkDate.getDate() - 1);
 
 		while (true) {
 			const nextDate = new Date(checkDate);
