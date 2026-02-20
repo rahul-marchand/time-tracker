@@ -1,6 +1,6 @@
 {
 	"name": "obsidian-time-tracker",
-	"version": "2.1.0",
+	"version": "0.2.0",
 	"description": "Simple, reliable time tracking for Obsidian",
 	"main": "main.js",
 	"scripts": {
