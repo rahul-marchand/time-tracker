@@ -16,19 +16,25 @@ export class SettingsTab extends PluginSettingTab {
 
 		containerEl.createEl('h2', { text: 'General' });
 
-		new Setting(containerEl)
-			.setName('Streak target')
-			.setDesc('Minimum minutes per day to count towards streak')
-			.addText(text => {
-				text.inputEl.type = 'number';
-				text.inputEl.min = '1';
-				text.setValue(String(this.plugin.settings.streakTargetMins));
-				text.onChange(async v => {
-					const mins = parseInt(v) || 60;
-					this.plugin.settings.streakTargetMins = mins;
-					await this.plugin.saveSettings();
-				});
+		const goalSetting = new Setting(containerEl)
+			.setName('Daily goal')
+			.setDesc('Target minutes per day (S M T W T F S)');
+		const row = goalSetting.controlEl.createDiv('daily-goal-row');
+		const days = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
+		const goals = this.plugin.settings.dailyGoalMins;
+		for (let i = 0; i < 7; i++) {
+			const col = row.createDiv('daily-goal-col');
+			col.createEl('label', { text: days[i], cls: 'daily-goal-label' });
+			const input = col.createEl('input', { cls: 'daily-goal-input' });
+			input.type = 'number';
+			input.min = '0';
+			input.value = String(goals[i]);
+			const idx = i;
+			input.addEventListener('change', async () => {
+				this.plugin.settings.dailyGoalMins[idx] = parseInt(input.value) || 0;
+				await this.plugin.saveSettings();
 			});
+		}
 
 		containerEl.createEl('h2', { text: 'Projects' });
 

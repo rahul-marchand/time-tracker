@@ -1,6 +1,7 @@
 import { App, Modal } from 'obsidian';
 import { Store } from '../store';
 import { Session } from '../types';
+import { formatHM, groupByProject } from '../utils';
 
 export class StatsModal extends Modal {
 	private store: Store;
@@ -17,16 +18,29 @@ export class StatsModal extends Modal {
 
 		contentEl.createEl('h2', { text: 'Time Stats' });
 
-		this.renderSection(contentEl, 'Today', this.store.getTodaySessions());
-		this.renderSection(contentEl, 'This Week', this.store.getWeekSessions());
+		const todayStart = new Date();
+		todayStart.setHours(0, 0, 0, 0);
+		const todayEnd = new Date(todayStart);
+		todayEnd.setDate(todayEnd.getDate() + 1);
+
+		const now = new Date();
+		const dayOfWeek = (now.getDay() + 6) % 7;
+		const weekStart = new Date(now);
+		weekStart.setDate(now.getDate() - dayOfWeek);
+		weekStart.setHours(0, 0, 0, 0);
+		const weekEnd = new Date(weekStart);
+		weekEnd.setDate(weekEnd.getDate() + 7);
+
+		this.renderSection(contentEl, 'Today', this.store.getTodaySessions(), todayStart, todayEnd);
+		this.renderSection(contentEl, 'This Week', this.store.getWeekSessions(), weekStart, weekEnd);
 	}
 
-	private renderSection(el: HTMLElement, title: string, sessions: Session[]): void {
+	private renderSection(el: HTMLElement, title: string, sessions: Session[], rangeStart: Date, rangeEnd: Date): void {
 		const section = el.createDiv('stats-section');
 		section.createEl('h3', { text: title });
 
-		const byProject = this.groupByProject(sessions);
-		const total = this.store.getTotalTime(sessions);
+		const byProject = groupByProject(sessions);
+		const total = this.store.getTotalTimeInRange(sessions, rangeStart, rangeEnd);
 
 		if (Object.keys(byProject).length === 0) {
 			section.createEl('p', { text: 'No time tracked', cls: 'muted' });
@@ -36,29 +50,14 @@ export class StatsModal extends Modal {
 		const list = section.createEl('ul', { cls: 'stats-list' });
 		for (const [projectId, projectSessions] of Object.entries(byProject)) {
 			const project = this.store.getProject(projectId);
-			const time = this.store.getTotalTime(projectSessions);
+			const time = this.store.getTotalTimeInRange(projectSessions, rangeStart, rangeEnd);
 			const li = list.createEl('li');
 			const dot = li.createSpan({ cls: 'color-dot' });
 			dot.style.backgroundColor = project?.color ?? '#888';
-			li.createSpan({ text: `${project?.name ?? projectId}: ${this.formatTime(time)}` });
+			li.createSpan({ text: `${project?.name ?? projectId}: ${formatHM(time)}` });
 		}
 
-		section.createEl('p', { text: `Total: ${this.formatTime(total)}`, cls: 'stats-total' });
-	}
-
-	private groupByProject(sessions: Session[]): Record<string, Session[]> {
-		const result: Record<string, Session[]> = {};
-		for (const s of sessions) {
-			(result[s.project] ??= []).push(s);
-		}
-		return result;
-	}
-
-	private formatTime(ms: number): string {
-		const mins = Math.round(ms / 60000);
-		const h = Math.floor(mins / 60);
-		const m = mins % 60;
-		return h > 0 ? `${h}h ${m}m` : `${m}m`;
+		section.createEl('p', { text: `Total: ${formatHM(total)}`, cls: 'stats-total' });
 	}
 
 	onClose(): void {

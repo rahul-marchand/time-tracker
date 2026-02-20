@@ -47,9 +47,9 @@ export class Timer extends Events {
 		this.trigger('change');
 	}
 
-	async stop(): Promise<Session | null> {
+	async stop(): Promise<void> {
 		if (this.state.status === 'idle' || !this.state.projectId || !this.state.startTime) {
-			return null;
+			return;
 		}
 		const session: Session = {
 			project: this.state.projectId,
@@ -60,7 +60,6 @@ export class Timer extends Events {
 		this.state = { status: 'idle', projectId: null, startTime: null };
 		await this.persistState(this.state);
 		this.trigger('change');
-		return session;
 	}
 
 	async discard(): Promise<void> {
@@ -69,12 +68,4 @@ export class Timer extends Events {
 		this.trigger('change');
 	}
 
-	async addManual(projectId: string, start: Date, end: Date): Promise<void> {
-		await this.store.addSession({
-			project: projectId,
-			start: start.toISOString(),
-			end: end.toISOString(),
-		});
-		this.trigger('change');
-	}
 }

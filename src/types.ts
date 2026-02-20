@@ -24,12 +24,12 @@ export interface TimerState {
 
 export interface TimeTrackerSettings {
 	timerState: TimerState;
-	streakTargetMins: number;
+	dailyGoalMins: number[];
 }
 
 export const DEFAULT_SETTINGS: TimeTrackerSettings = {
 	timerState: { status: 'idle', projectId: null, startTime: null },
-	streakTargetMins: 60,
+	dailyGoalMins: [240, 480, 480, 480, 480, 480, 240],
 };
 
 export const DEFAULT_PROJECTS: Project[] = [

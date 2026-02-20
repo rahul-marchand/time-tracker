@@ -1,5 +1,6 @@
 import { Plugin } from 'obsidian';
 import { TimeData, Session, Project, DEFAULT_PROJECTS } from './types';
+import { clampedDuration } from './utils';
 
 const DATA_FILE = 'time-data.json';
 
@@ -84,18 +85,31 @@ export class Store {
 		}
 	}
 
+	getSessionsWithIndices(start: Date, end: Date): { index: number; session: Session }[] {
+		return this.data.sessions
+			.map((session, index) => ({ index, session }))
+			.filter(({ session }) =>
+				new Date(session.start).getTime() < end.getTime() &&
+				new Date(session.end).getTime() > start.getTime()
+			);
+	}
+
 	// Queries
 	getSessionsInRange(start: Date, end: Date): Session[] {
-		return this.data.sessions.filter(s => {
-			const t = new Date(s.start).getTime();
-			return t >= start.getTime() && t < end.getTime();
-		});
+		return this.data.sessions.filter(s =>
+			new Date(s.start).getTime() < end.getTime() &&
+			new Date(s.end).getTime() > start.getTime()
+		);
 	}
 
 	getTotalTime(sessions: Session[]): number {
 		return sessions.reduce((sum, s) => {
 			return sum + new Date(s.end).getTime() - new Date(s.start).getTime();
 		}, 0);
+	}
+
+	getTotalTimeInRange(sessions: Session[], start: Date, end: Date): number {
+		return sessions.reduce((sum, s) => sum + clampedDuration(s, start, end), 0);
 	}
 
 	getTodaySessions(): Session[] {
@@ -124,31 +138,4 @@ export class Store {
 		return this.getSessionsInRange(start, end);
 	}
 
-	getStreak(targetMs: number): number {
-		const today = new Date();
-		today.setHours(0, 0, 0, 0);
-		let streak = 0;
-
-		// Check today first
-		const tomorrow = new Date(today);
-		tomorrow.setDate(today.getDate() + 1);
-		const todaySessions = this.getSessionsInRange(today, tomorrow);
-		const todayTotal = this.getTotalTime(todaySessions);
-		if (todayTotal >= targetMs) streak++;
-
-		// Count consecutive days from yesterday backwards
-		let checkDate = new Date(today);
-		checkDate.setDate(checkDate.getDate() - 1);
-
-		while (true) {
-			const nextDate = new Date(checkDate);
-			nextDate.setDate(checkDate.getDate() + 1);
-			const sessions = this.getSessionsInRange(checkDate, nextDate);
-			const total = this.getTotalTime(sessions);
-			if (total < targetMs) break;
-			streak++;
-			checkDate.setDate(checkDate.getDate() - 1);
-		}
-		return streak;
-	}
 }

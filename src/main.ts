@@ -4,7 +4,7 @@ import { Store } from './store';
 import { Timer } from './timer';
 import { StatusBar } from './ui/status-bar';
 import { StatsModal } from './ui/stats-modal';
-import { ManualEntryModal } from './ui/manual-entry-modal';
+import { AddTimeModal } from './ui/add-time-modal';
 import { SettingsTab } from './ui/settings-tab';
 import { SidebarView, VIEW_TYPE } from './ui/sidebar-view';
 
@@ -40,11 +40,11 @@ export default class TimeTrackerPlugin extends Plugin {
 		this.addCommand({
 			id: 'start-stop',
 			name: 'Start/Stop Timer',
-			callback: () => {
+			callback: async () => {
 				if (this.timer.status === 'running') {
-					this.timer.stop();
+					await this.timer.stop();
 				} else {
-					this.activateSidebar();
+					await this.activateSidebar();
 				}
 			},
 		});
@@ -58,7 +58,7 @@ export default class TimeTrackerPlugin extends Plugin {
 		this.addCommand({
 			id: 'add-manual',
 			name: 'Add Time Manually',
-			callback: () => new ManualEntryModal(this.app, this.timer, this.store).open(),
+			callback: () => new AddTimeModal(this.app, this.timer, this.store).open(),
 		});
 
 		this.addSettingTab(new SettingsTab(this.app, this));
@@ -98,6 +98,10 @@ export default class TimeTrackerPlugin extends Plugin {
 
 	async loadSettings(): Promise<void> {
 		this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+		if (!Array.isArray(this.settings.dailyGoalMins)) {
+			const v = this.settings.dailyGoalMins as unknown as number;
+			this.settings.dailyGoalMins = Array(7).fill(v);
+		}
 	}
 
 	async saveSettings(): Promise<void> {
