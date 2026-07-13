@@ -183,7 +183,11 @@ export class AnalyticsSection {
 			const sessions = this.store.getSessionsInRange(date, nextDate);
 			const total = this.store.getTotalTimeInRange(sessions, date, nextDate);
 			const projects = this.getProjectBreakdown(sessions, date, nextDate);
-			result.push({ label: i.toString(), total, isToday: i === today.getDate(), projects });
+			const isToday = i === today.getDate();
+			const isTick = i === 1 || i % 5 === 0;
+			const nextToToday = Math.abs(i - today.getDate()) === 1;
+			const label = isToday || (isTick && !nextToToday) ? i.toString() : '';
+			result.push({ label, total, isToday, projects });
 		}
 		return result;
 	}

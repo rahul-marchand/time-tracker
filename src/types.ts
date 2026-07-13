@@ -3,6 +3,7 @@ export interface Project {
 	name: string;
 	color: string;
 	icon: string;
+	archived?: boolean;
 }
 
 export interface Session {

@@ -33,11 +33,16 @@ export class Store {
 		);
 	}
 
-	// Projects
+	// Projects (active only — pickers exclude archived)
 	get projects(): Project[] {
-		return this.data.projects;
+		return this.data.projects.filter(p => !p.archived);
 	}
 
+	get archivedProjects(): Project[] {
+		return this.data.projects.filter(p => p.archived);
+	}
+
+	// Searches all projects, including archived, so history resolves
 	getProject(id: string): Project | undefined {
 		return this.data.projects.find(p => p.id === id);
 	}
@@ -55,9 +60,17 @@ export class Store {
 		}
 	}
 
+	async archiveProject(id: string): Promise<void> {
+		await this.updateProject(id, { archived: true });
+	}
+
+	async restoreProject(id: string): Promise<void> {
+		await this.updateProject(id, { archived: false });
+	}
+
+	// Removes the project record only; sessions are always kept
 	async deleteProject(id: string): Promise<void> {
 		this.data.projects = this.data.projects.filter(p => p.id !== id);
-		this.data.sessions = this.data.sessions.filter(s => s.project !== id);
 		await this.save();
 	}
 

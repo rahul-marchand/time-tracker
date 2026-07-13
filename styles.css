@@ -403,8 +403,15 @@
 	gap: 2px;
 }
 
+/* Sparse month labels may exceed their column; centered overflow bleeds
+   into adjacent unlabeled columns */
+.week-chart--month .week-label {
+	white-space: nowrap;
+}
+
 .week-col {
 	flex: 1;
+	min-width: 0;
 	display: flex;
 	flex-direction: column;
 	height: 96px;
@@ -953,4 +960,13 @@
 	margin-left: 8px;
 	cursor: pointer;
 	font-weight: 600;
+}
+
+/* Archived projects (settings) */
+.archived-heading {
+	color: var(--text-muted);
+}
+
+.archived-project {
+	opacity: 0.6;
 }

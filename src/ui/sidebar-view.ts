@@ -52,6 +52,7 @@ export class SidebarView extends ItemView {
 
 	private render(): void {
 		const container = this.containerEl.children[1] as HTMLElement;
+		const prevScroll = (container.querySelector('.timer-view') as HTMLElement | null)?.scrollTop ?? 0;
 		container.empty();
 		container.addClass('time-tracker-sidebar');
 
@@ -61,6 +62,7 @@ export class SidebarView extends ItemView {
 			const view = container.createDiv('timer-view');
 			this.timerSection.render(view, this.viewDate);
 			this.sessionsSection.render(view, this.viewDate, this.isViewingToday());
+			view.scrollTop = prevScroll;
 		} else {
 			this.analyticsSection.render(container, this.analyticsMode, (m) => {
 				this.analyticsMode = m;

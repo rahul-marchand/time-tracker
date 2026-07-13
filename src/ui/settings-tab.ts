@@ -1,6 +1,7 @@
 import { App, PluginSettingTab, Setting, setIcon } from 'obsidian';
 import type TimeTrackerPlugin from '../main';
 import { Project, AVAILABLE_ICONS } from '../types';
+import { ConfirmModal } from './confirm-modal';
 
 export class SettingsTab extends PluginSettingTab {
 	plugin: TimeTrackerPlugin;
@@ -57,6 +58,51 @@ export class SettingsTab extends PluginSettingTab {
 					this.display();
 				});
 			});
+
+		const archived = this.plugin.store.archivedProjects;
+		if (archived.length > 0) {
+			containerEl.createEl('h2', { text: 'Archived', cls: 'archived-heading' });
+			for (const project of archived) {
+				this.renderArchivedProject(containerEl, project);
+			}
+		}
+	}
+
+	private renderArchivedProject(container: HTMLElement, project: Project): void {
+		const setting = new Setting(container);
+		setting.settingEl.addClass('archived-project');
+		setting.setName(project.name);
+
+		const iconSpan = setting.nameEl.createSpan({ cls: 'project-icon' });
+		setIcon(iconSpan, project.icon || 'folder');
+		setting.nameEl.prepend(iconSpan);
+
+		setting.addButton(btn => {
+			btn.setButtonText('Restore');
+			btn.onClick(async () => {
+				await this.plugin.store.restoreProject(project.id);
+				this.display();
+			});
+		});
+
+		setting.addButton(btn => {
+			btn.setIcon('trash');
+			btn.setTooltip('Delete permanently');
+			btn.setWarning();
+			btn.onClick(() => {
+				const count = this.plugin.store.sessions.filter(s => s.project === project.id).length;
+				new ConfirmModal(
+					this.app,
+					`Delete "${project.name}" permanently?`,
+					`Its ${count} logged sessions are kept, but will display as grey "Unknown" without the project's name and colour. This cannot be undone.`,
+					'Delete permanently',
+					async () => {
+						await this.plugin.store.deleteProject(project.id);
+						this.display();
+					}
+				).open();
+			});
+		});
 	}
 
 	private renderProject(container: HTMLElement, project: Project): void {
@@ -99,10 +145,10 @@ export class SettingsTab extends PluginSettingTab {
 
 		if (this.plugin.store.projects.length > 1) {
 			setting.addButton(btn => {
-				btn.setIcon('trash');
-				btn.setWarning();
+				btn.setIcon('archive');
+				btn.setTooltip('Archive (keeps history)');
 				btn.onClick(async () => {
-					await this.plugin.store.deleteProject(project.id);
+					await this.plugin.store.archiveProject(project.id);
 					this.display();
 				});
 			});
