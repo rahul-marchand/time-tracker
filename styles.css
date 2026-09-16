@@ -94,6 +94,7 @@
 	display: flex;
 	flex-direction: column;
 	overflow-y: auto;
+	overflow-x: hidden;
 }
 
 .timer-section {
@@ -478,6 +479,7 @@
 	flex: 1;
 	padding: 12px;
 	overflow-y: auto;
+	overflow-x: hidden;
 	display: flex;
 	flex-direction: column;
 	gap: 16px;
@@ -661,6 +663,18 @@
 	opacity: 1;
 }
 
+/* Keep edge tooltips inside the chart */
+.week-col:first-child .week-bar::after {
+	left: 0;
+	transform: none;
+}
+
+.week-col:last-child .week-bar::after {
+	left: auto;
+	right: 0;
+	transform: none;
+}
+
 /* Stats */
 .analytics-stats {
 	padding-top: 0;
@@ -777,6 +791,7 @@
 	top: -3px;
 	bottom: -3px;
 	width: 2px;
+	margin-left: -1px;
 	border-radius: 1px;
 	background: var(--text-muted);
 	box-shadow: 0 0 0 1px var(--background-primary);

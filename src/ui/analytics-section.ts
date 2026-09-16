@@ -149,7 +149,7 @@ export class AnalyticsSection {
 			barFill.style.backgroundColor = color;
 
 			if (target > 0) {
-				barContainer.createDiv('breakdown-pace').style.left = `${pace * 100}%`;
+				barContainer.createDiv('breakdown-pace').style.left = `${Math.min(pace * 100, 99.5)}%`;
 				// Red only once the week is well under way; before that a zero is just a quiet row.
 				if (time >= target) row.addClass('breakdown-row--met');
 				else if (time === 0 && dayIdx >= 2) row.addClass('breakdown-row--zero');
