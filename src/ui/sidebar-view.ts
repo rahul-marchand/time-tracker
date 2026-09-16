@@ -36,12 +36,16 @@ export class SidebarView extends ItemView {
 		this.registerInterval(window.setInterval(() => {
 			if (timer.status === 'running') this.render();
 		}, 1000));
+		// Pace marker and daily average drift with the clock; a redraw every 5 min is plenty
+		this.registerInterval(window.setInterval(() => {
+			if (this.activeTab === 'analytics' && timer.status !== 'running') this.render();
+		}, 5 * 60_000));
 		this.render();
 	}
 
 	private render(): void {
 		const container = this.contentEl;
-		const prevScroll = container.querySelector('.timer-view')?.scrollTop ?? 0;
+		const prevScroll = container.querySelector('.timer-view, .analytics-view')?.scrollTop ?? 0;
 		container.empty();
 		container.addClass('time-tracker-sidebar');
 
@@ -63,6 +67,8 @@ export class SidebarView extends ItemView {
 				this.analyticsMode = m;
 				this.render();
 			});
+			const view = container.querySelector('.analytics-view');
+			if (view) view.scrollTop = prevScroll;
 		}
 	}
 
