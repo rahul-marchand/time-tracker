@@ -1,6 +1,4 @@
 import { ItemView, WorkspaceLeaf } from 'obsidian';
-import { Timer } from '../timer';
-import { Store } from '../store';
 import type TimeTrackerPlugin from '../main';
 import { TimerSection } from './timer-section';
 import { SessionsSection } from './sessions-section';
@@ -12,26 +10,19 @@ type Tab = 'timer' | 'analytics';
 type AnalyticsMode = 'week' | 'month';
 
 export class SidebarView extends ItemView {
-	private timer: Timer;
-	private store: Store;
-	private plugin: TimeTrackerPlugin;
-	private interval: number | null = null;
 	private activeTab: Tab = 'timer';
 	private analyticsMode: AnalyticsMode = 'week';
-	private viewDate: Date = new Date();
+	private dayOffset = 0; // 0 = today; derived each render so midnight rolls over
 
 	private timerSection: TimerSection;
 	private sessionsSection: SessionsSection;
 	private analyticsSection: AnalyticsSection;
 
-	constructor(leaf: WorkspaceLeaf, timer: Timer, store: Store, plugin: TimeTrackerPlugin) {
+	constructor(leaf: WorkspaceLeaf, private plugin: TimeTrackerPlugin) {
 		super(leaf);
-		this.timer = timer;
-		this.store = store;
-		this.plugin = plugin;
-		this.timerSection = new TimerSection(this.app, timer, store);
-		this.sessionsSection = new SessionsSection(this.app, timer, store, plugin);
-		this.analyticsSection = new AnalyticsSection(store);
+		this.timerSection = new TimerSection(plugin);
+		this.sessionsSection = new SessionsSection(plugin);
+		this.analyticsSection = new AnalyticsSection(plugin.store);
 	}
 
 	getViewType(): string { return VIEW_TYPE; }
@@ -39,20 +30,18 @@ export class SidebarView extends ItemView {
 	getIcon(): string { return 'clock'; }
 
 	async onOpen(): Promise<void> {
-		this.timer.on('change', () => this.render());
-		this.interval = window.setInterval(() => {
-			if (this.timer.status === 'running') this.render();
-		}, 1000);
+		const { timer, store } = this.plugin;
+		this.registerEvent(timer.on('change', () => this.render()));
+		this.registerEvent(store.on('change', () => this.render()));
+		this.registerInterval(window.setInterval(() => {
+			if (timer.status === 'running') this.render();
+		}, 1000));
 		this.render();
 	}
 
-	async onClose(): Promise<void> {
-		if (this.interval) window.clearInterval(this.interval);
-	}
-
 	private render(): void {
-		const container = this.containerEl.children[1] as HTMLElement;
-		const prevScroll = (container.querySelector('.timer-view') as HTMLElement | null)?.scrollTop ?? 0;
+		const container = this.contentEl;
+		const prevScroll = container.querySelector('.timer-view')?.scrollTop ?? 0;
 		container.empty();
 		container.addClass('time-tracker-sidebar');
 
@@ -60,8 +49,14 @@ export class SidebarView extends ItemView {
 
 		if (this.activeTab === 'timer') {
 			const view = container.createDiv('timer-view');
-			this.timerSection.render(view, this.viewDate);
-			this.sessionsSection.render(view, this.viewDate, this.isViewingToday());
+			const viewDate = new Date();
+			viewDate.setHours(0, 0, 0, 0);
+			viewDate.setDate(viewDate.getDate() - this.dayOffset);
+			this.timerSection.render(view, viewDate);
+			this.sessionsSection.render(view, viewDate, this.dayOffset === 0, (delta) => {
+				this.dayOffset = Math.max(this.dayOffset - delta, 0);
+				this.render();
+			});
 			view.scrollTop = prevScroll;
 		} else {
 			this.analyticsSection.render(container, this.analyticsMode, (m) => {
@@ -73,24 +68,15 @@ export class SidebarView extends ItemView {
 
 	private renderTabs(container: HTMLElement): void {
 		const tabs = container.createDiv('sidebar-tabs');
-
-		const timerTab = tabs.createDiv('sidebar-tab');
-		timerTab.setText('Timer');
-		if (this.activeTab === 'timer') timerTab.addClass('active');
-		timerTab.onClickEvent(() => { this.activeTab = 'timer'; this.render(); });
-
-		const analyticsTab = tabs.createDiv('sidebar-tab');
-		analyticsTab.setText('Analytics');
-		if (this.activeTab === 'analytics') analyticsTab.addClass('active');
-		analyticsTab.onClickEvent(() => { this.activeTab = 'analytics'; this.render(); });
-	}
-
-	private isViewingToday(): boolean {
-		const today = new Date();
-		return (
-			this.viewDate.getFullYear() === today.getFullYear() &&
-			this.viewDate.getMonth() === today.getMonth() &&
-			this.viewDate.getDate() === today.getDate()
-		);
+		tabs.setAttr('role', 'tablist');
+		const add = (tab: Tab, label: string) => {
+			const btn = tabs.createEl('button', { cls: 'sidebar-tab', text: label });
+			btn.setAttr('role', 'tab');
+			btn.setAttr('aria-selected', String(this.activeTab === tab));
+			if (this.activeTab === tab) btn.addClass('active');
+			btn.onClickEvent(() => { this.activeTab = tab; this.render(); });
+		};
+		add('timer', 'Timer');
+		add('analytics', 'Analytics');
 	}
 }

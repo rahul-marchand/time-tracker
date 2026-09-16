@@ -1,16 +1,15 @@
 import { Events } from 'obsidian';
-import { TimerState, Session } from './types';
+import { TimerState } from './types';
 import { Store } from './store';
 
 export class Timer extends Events {
 	private state: TimerState = { status: 'idle', projectId: null, startTime: null };
-	private store: Store;
-	private persistState: (state: TimerState) => Promise<void>;
 
-	constructor(store: Store, persistState: (state: TimerState) => Promise<void>) {
+	constructor(
+		private store: Store,
+		private persistState: (state: TimerState) => Promise<void>,
+	) {
 		super();
-		this.store = store;
-		this.persistState = persistState;
 	}
 
 	load(state: TimerState): void {
@@ -36,28 +35,20 @@ export class Timer extends Events {
 
 	async start(projectId: string): Promise<void> {
 		if (this.state.status === 'running') {
+			if (this.state.projectId === projectId) return;
 			await this.stop();
 		}
-		this.state = {
-			status: 'running',
-			projectId,
-			startTime: new Date().toISOString(),
-		};
+		this.state = { status: 'running', projectId, startTime: new Date().toISOString() };
 		await this.persistState(this.state);
 		this.trigger('change');
 	}
 
 	async stop(): Promise<void> {
-		if (this.state.status === 'idle' || !this.state.projectId || !this.state.startTime) {
-			return;
-		}
-		const session: Session = {
-			project: this.state.projectId,
-			start: this.state.startTime,
-			end: new Date().toISOString(),
-		};
-		await this.store.addSession(session);
+		const { status, projectId, startTime } = this.state;
+		if (status === 'idle' || !projectId || !startTime) return;
+		// Flip state before awaiting so a second call during the save is a no-op
 		this.state = { status: 'idle', projectId: null, startTime: null };
+		await this.store.addSession({ project: projectId, start: startTime, end: new Date().toISOString() });
 		await this.persistState(this.state);
 		this.trigger('change');
 	}
@@ -67,5 +58,4 @@ export class Timer extends Events {
 		await this.persistState(this.state);
 		this.trigger('change');
 	}
-
 }

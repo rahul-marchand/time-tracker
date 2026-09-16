@@ -1,5 +1,4 @@
 import { App, Modal, Notice } from 'obsidian';
-import { Timer } from '../timer';
 import { Store } from '../store';
 import { Session } from '../types';
 import { formatHM } from '../utils';
@@ -12,10 +11,7 @@ export interface AddTimeModalOpts {
 }
 
 export class AddTimeModal extends Modal {
-	private timer: Timer;
-	private store: Store;
 	private opts: AddTimeModalOpts;
-
 	private projectId: string;
 	private date: string;
 	private startTime: string;
@@ -26,10 +22,8 @@ export class AddTimeModal extends Modal {
 		return this.opts.editIndex !== undefined && this.opts.session !== undefined;
 	}
 
-	constructor(app: App, timer: Timer, store: Store, opts?: AddTimeModalOpts) {
+	constructor(app: App, private store: Store, opts?: AddTimeModalOpts) {
 		super(app);
-		this.timer = timer;
-		this.store = store;
 		this.opts = opts ?? {};
 
 		if (this.isEditing) {
@@ -44,7 +38,7 @@ export class AddTimeModal extends Modal {
 			const now = this.opts.date ?? new Date();
 			this.projectId = this.opts.projectId ?? this.store.projects[0]?.id ?? '';
 			this.date = this.toDateStr(now);
-			const endHour = now.getHours();
+			const endHour = new Date().getHours();
 			const startHour = Math.max(endHour - 1, 0);
 			this.startTime = `${String(startHour).padStart(2, '0')}:00`;
 			this.endTime = `${String(endHour).padStart(2, '0')}:00`;
@@ -54,10 +48,8 @@ export class AddTimeModal extends Modal {
 	onOpen(): void {
 		const { contentEl } = this;
 		contentEl.addClass('time-tracker-add-modal');
-
 		contentEl.createEl('h3', { text: this.isEditing ? 'Edit Session' : 'Add Time' });
 
-		// Project
 		const projGroup = contentEl.createDiv('add-modal-field');
 		projGroup.createEl('label', { text: 'Project', cls: 'add-modal-label' });
 		const select = projGroup.createEl('select', { cls: 'add-modal-select' });
@@ -67,13 +59,11 @@ export class AddTimeModal extends Modal {
 		}
 		select.addEventListener('change', () => { this.projectId = select.value; });
 
-		// Date
 		const dateGroup = contentEl.createDiv('add-modal-field');
 		dateGroup.createEl('label', { text: 'Date', cls: 'add-modal-label' });
 		const dateInput = dateGroup.createEl('input', { cls: 'add-modal-input', type: 'date', value: this.date });
-		dateInput.addEventListener('change', () => { this.date = dateInput.value; });
+		dateInput.addEventListener('change', () => { this.date = dateInput.value; this.updateDuration(); });
 
-		// Time
 		const timeGroup = contentEl.createDiv('add-modal-field');
 		timeGroup.createEl('label', { text: 'Time', cls: 'add-modal-label' });
 		const timeRow = timeGroup.createDiv('add-modal-time-row');
@@ -84,7 +74,6 @@ export class AddTimeModal extends Modal {
 		endInput.addEventListener('change', () => { this.endTime = endInput.value; this.updateDuration(); });
 		this.updateDuration();
 
-		// Submit
 		const btn = contentEl.createEl('button', {
 			text: this.isEditing ? 'Save' : 'Add',
 			cls: 'add-modal-submit mod-cta',
@@ -92,36 +81,37 @@ export class AddTimeModal extends Modal {
 		btn.addEventListener('click', () => this.submit());
 	}
 
-	private updateDuration(): void {
-		if (!this.durationEl) return;
-		const ms = this.computeDurationMs();
-		this.durationEl.setText(ms > 0 ? formatHM(ms) : '—');
-	}
-
-	private computeDurationMs(): number {
+	// null when any field is empty or unparsable; an end at or before start rolls to the next day
+	private parse(): { start: Date; end: Date } | null {
+		if (!this.projectId || !this.date || !this.startTime || !this.endTime) return null;
 		const start = new Date(`${this.date}T${this.startTime}`);
 		let end = new Date(`${this.date}T${this.endTime}`);
+		if (isNaN(start.getTime()) || isNaN(end.getTime())) return null;
 		if (end <= start) end = new Date(end.getTime() + 86400000);
-		return end.getTime() - start.getTime();
+		return { start, end };
+	}
+
+	private updateDuration(): void {
+		const parsed = this.parse();
+		this.durationEl?.setText(parsed ? formatHM(parsed.end.getTime() - parsed.start.getTime()) : '—');
 	}
 
 	private async submit(): Promise<void> {
-		const start = new Date(`${this.date}T${this.startTime}`);
-		let end = new Date(`${this.date}T${this.endTime}`);
-		if (end <= start) end = new Date(end.getTime() + 86400000);
-
+		const parsed = this.parse();
+		if (!parsed) {
+			new Notice('Choose a project and enter a valid date and times.');
+			return;
+		}
 		const session: Session = {
 			project: this.projectId,
-			start: start.toISOString(),
-			end: end.toISOString(),
+			start: parsed.start.toISOString(),
+			end: parsed.end.toISOString(),
 		};
-
 		if (this.isEditing) {
 			await this.store.updateSession(this.opts.editIndex!, session);
 		} else {
 			await this.store.addSession(session);
 		}
-		this.timer.trigger('change');
 		this.close();
 	}
 

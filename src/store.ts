@@ -1,36 +1,48 @@
-import { Plugin } from 'obsidian';
+import { Events, Notice, Plugin } from 'obsidian';
 import { TimeData, Session, Project, DEFAULT_PROJECTS } from './types';
-import { clampedDuration } from './utils';
+import { clampedDuration, overlaps, Range } from './utils';
 
 const DATA_FILE = 'time-data.json';
 
-export class Store {
-	private plugin: Plugin;
+// Emits 'change' after every successful save.
+export class Store extends Events {
 	private data: TimeData = { projects: [], sessions: [] };
+	private unreadable = false;
 
-	constructor(plugin: Plugin) {
-		this.plugin = plugin;
+	constructor(private plugin: Plugin) {
+		super();
 	}
 
 	private get path(): string {
 		return `${this.plugin.manifest.dir}/${DATA_FILE}`;
 	}
 
+	// Never writes on load: a missing file may be a sync race, and a corrupt one must be kept for recovery.
 	async load(): Promise<void> {
 		const { adapter } = this.plugin.app.vault;
-		if (await adapter.exists(this.path)) {
-			this.data = JSON.parse(await adapter.read(this.path));
-		} else {
+		if (!(await adapter.exists(this.path))) {
 			this.data = { projects: [...DEFAULT_PROJECTS], sessions: [] };
-			await this.save();
+			return;
+		}
+		try {
+			const raw = JSON.parse(await adapter.read(this.path));
+			this.data = {
+				projects: Array.isArray(raw.projects) ? raw.projects : [],
+				sessions: Array.isArray(raw.sessions) ? raw.sessions : [],
+			};
+		} catch {
+			this.unreadable = true;
+			new Notice(`Time Tracker: could not read ${DATA_FILE}. Changes will not be saved until it is fixed.`, 0);
 		}
 	}
 
 	async save(): Promise<void> {
-		await this.plugin.app.vault.adapter.write(
-			this.path,
-			JSON.stringify(this.data, null, '\t')
-		);
+		if (this.unreadable) {
+			new Notice(`Time Tracker: not saving over an unreadable ${DATA_FILE}.`);
+			return;
+		}
+		await this.plugin.app.vault.adapter.write(this.path, JSON.stringify(this.data, null, '\t'));
+		this.trigger('change');
 	}
 
 	// Projects (active only — pickers exclude archived)
@@ -98,57 +110,17 @@ export class Store {
 		}
 	}
 
-	getSessionsWithIndices(start: Date, end: Date): { index: number; session: Session }[] {
+	getSessionsWithIndices(range: Range): { index: number; session: Session }[] {
 		return this.data.sessions
 			.map((session, index) => ({ index, session }))
-			.filter(({ session }) =>
-				new Date(session.start).getTime() < end.getTime() &&
-				new Date(session.end).getTime() > start.getTime()
-			);
+			.filter(({ session }) => overlaps(session, range));
 	}
 
-	// Queries
-	getSessionsInRange(start: Date, end: Date): Session[] {
-		return this.data.sessions.filter(s =>
-			new Date(s.start).getTime() < end.getTime() &&
-			new Date(s.end).getTime() > start.getTime()
-		);
+	getSessionsInRange(range: Range): Session[] {
+		return this.data.sessions.filter(s => overlaps(s, range));
 	}
 
-	getTotalTime(sessions: Session[]): number {
-		return sessions.reduce((sum, s) => {
-			return sum + new Date(s.end).getTime() - new Date(s.start).getTime();
-		}, 0);
+	getTotalTimeInRange(sessions: Session[], range: Range): number {
+		return sessions.reduce((sum, s) => sum + clampedDuration(s, range.start, range.end), 0);
 	}
-
-	getTotalTimeInRange(sessions: Session[], start: Date, end: Date): number {
-		return sessions.reduce((sum, s) => sum + clampedDuration(s, start, end), 0);
-	}
-
-	getTodaySessions(): Session[] {
-		const start = new Date();
-		start.setHours(0, 0, 0, 0);
-		const end = new Date(start);
-		end.setDate(end.getDate() + 1);
-		return this.getSessionsInRange(start, end);
-	}
-
-	getWeekSessions(): Session[] {
-		const now = new Date();
-		const dayOfWeek = (now.getDay() + 6) % 7; // Monday = 0
-		const start = new Date(now);
-		start.setDate(now.getDate() - dayOfWeek);
-		start.setHours(0, 0, 0, 0);
-		const end = new Date(start);
-		end.setDate(end.getDate() + 7);
-		return this.getSessionsInRange(start, end);
-	}
-
-	getMonthSessions(): Session[] {
-		const now = new Date();
-		const start = new Date(now.getFullYear(), now.getMonth(), 1);
-		const end = new Date(now.getFullYear(), now.getMonth() + 1, 1);
-		return this.getSessionsInRange(start, end);
-	}
-
 }

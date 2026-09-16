@@ -1,4 +1,4 @@
-import { Plugin, WorkspaceLeaf } from 'obsidian';
+import { Plugin } from 'obsidian';
 import { TimeTrackerSettings, DEFAULT_SETTINGS, TimerState } from './types';
 import { Store } from './store';
 import { Timer } from './timer';
@@ -12,7 +12,6 @@ export default class TimeTrackerPlugin extends Plugin {
 	settings!: TimeTrackerSettings;
 	store!: Store;
 	timer!: Timer;
-	private statusBar!: StatusBar;
 
 	async onload(): Promise<void> {
 		await this.loadSettings();
@@ -23,13 +22,8 @@ export default class TimeTrackerPlugin extends Plugin {
 		this.timer = new Timer(this.store, (state) => this.saveTimerState(state));
 		this.timer.load(this.settings.timerState);
 
-		// Register sidebar view
-		this.registerView(VIEW_TYPE, (leaf) => new SidebarView(leaf, this.timer, this.store, this));
-
-		this.statusBar = new StatusBar(this, this.timer, this.store);
-
-		// Status bar click opens sidebar
-		this.timer.on('status-bar-click', () => this.activateSidebar());
+		this.registerView(VIEW_TYPE, (leaf) => new SidebarView(leaf, this));
+		new StatusBar(this);
 
 		this.addCommand({
 			id: 'open-tracker',
@@ -58,50 +52,41 @@ export default class TimeTrackerPlugin extends Plugin {
 		this.addCommand({
 			id: 'add-manual',
 			name: 'Add Time Manually',
-			callback: () => new AddTimeModal(this.app, this.timer, this.store).open(),
+			callback: () => new AddTimeModal(this.app, this.store).open(),
 		});
 
 		this.addSettingTab(new SettingsTab(this.app, this));
 
-		// Open sidebar on startup if configured
 		this.app.workspace.onLayoutReady(() => this.initSidebar());
-	}
-
-	onunload(): void {
-		this.statusBar?.destroy();
-		this.app.workspace.detachLeavesOfType(VIEW_TYPE);
 	}
 
 	async activateSidebar(): Promise<void> {
 		const { workspace } = this.app;
-
 		let leaf = workspace.getLeavesOfType(VIEW_TYPE)[0];
-
 		if (!leaf) {
 			const rightLeaf = workspace.getRightLeaf(false);
-			if (rightLeaf) {
-				leaf = rightLeaf;
-				await leaf.setViewState({ type: VIEW_TYPE, active: true });
-			}
+			if (!rightLeaf) return;
+			leaf = rightLeaf;
+			await leaf.setViewState({ type: VIEW_TYPE, active: true });
 		}
-
-		if (leaf) {
-			workspace.revealLeaf(leaf);
-		}
+		workspace.revealLeaf(leaf);
 	}
 
+	// Create the view on startup if absent, but don't steal the sidebar
 	private async initSidebar(): Promise<void> {
-		if (this.app.workspace.getLeavesOfType(VIEW_TYPE).length === 0) {
-			await this.activateSidebar();
-		}
+		if (this.app.workspace.getLeavesOfType(VIEW_TYPE).length > 0) return;
+		await this.app.workspace.getRightLeaf(false)?.setViewState({ type: VIEW_TYPE });
 	}
 
 	async loadSettings(): Promise<void> {
-		this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
-		if (!Array.isArray(this.settings.dailyGoalMins)) {
-			const v = this.settings.dailyGoalMins as unknown as number;
-			this.settings.dailyGoalMins = Array(7).fill(v);
-		}
+		const saved = (await this.loadData()) ?? {};
+		const raw = saved.dailyGoalMins;
+		const goals: unknown[] = Array.isArray(raw) ? raw : Array(7).fill(raw);
+		this.settings = {
+			timerState: saved.timerState ?? { ...DEFAULT_SETTINGS.timerState },
+			dailyGoalMins: DEFAULT_SETTINGS.dailyGoalMins.map((d, i) => (typeof goals[i] === 'number' ? (goals[i] as number) : d)),
+			pillLabelChars: typeof saved.pillLabelChars === 'number' && saved.pillLabelChars > 0 ? saved.pillLabelChars : DEFAULT_SETTINGS.pillLabelChars,
+		};
 	}
 
 	async saveSettings(): Promise<void> {

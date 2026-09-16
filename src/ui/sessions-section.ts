@@ -1,143 +1,126 @@
-import { App, Notice, setIcon } from 'obsidian';
-import { Timer } from '../timer';
-import { Store } from '../store';
-import { Session } from '../types';
-import { formatHM, formatHHMM } from '../utils';
-import { AddTimeModal } from './add-time-modal';
+import { Notice, setIcon } from 'obsidian';
 import type TimeTrackerPlugin from '../main';
+import { Session } from '../types';
+import { formatHM, formatHHMM, dayRange, Range } from '../utils';
+import { AddTimeModal } from './add-time-modal';
 
 export class SessionsSection {
-	constructor(
-		private app: App,
-		private timer: Timer,
-		private store: Store,
-		private plugin: TimeTrackerPlugin,
-	) {}
+	constructor(private plugin: TimeTrackerPlugin) {}
 
-	render(container: HTMLElement, viewDate: Date, isToday: boolean): void {
+	render(container: HTMLElement, viewDate: Date, isToday: boolean, onNavigate: (delta: number) => void): void {
+		const { timer, store } = this.plugin;
 		const section = container.createDiv('today-section');
+		const range = dayRange(viewDate);
 
-		const dayStart = new Date(viewDate);
-		dayStart.setHours(0, 0, 0, 0);
-		const dayEnd = new Date(dayStart);
-		dayEnd.setDate(dayEnd.getDate() + 1);
+		const indexed = store.getSessionsWithIndices(range);
+		const totalMs = store.getTotalTimeInRange(indexed.map(e => e.session), range);
 
-		const indexed = this.store.getSessionsWithIndices(dayStart, dayEnd);
-		const sessions = indexed.map(e => e.session);
-		const totalMs = this.store.getTotalTimeInRange(sessions, dayStart, dayEnd);
-		let runningMs = 0;
-		if (isToday && this.timer.status === 'running' && this.timer.startTime) {
-			const clampedStart = Math.max(this.timer.startTime.getTime(), dayStart.getTime());
-			runningMs = Date.now() - clampedStart;
+		const live = isToday && timer.status === 'running' && timer.startTime
+			? { start: new Date(Math.max(timer.startTime.getTime(), range.start.getTime())), projectId: timer.projectId! }
+			: null;
+		const liveMs = live ? Date.now() - live.start.getTime() : 0;
+
+		this.renderDateNav(section, viewDate, isToday, totalMs + liveMs, onNavigate);
+		this.renderProgressBar(section, totalMs + liveMs, viewDate);
+
+		const list = section.createDiv('today-breakdown');
+		if (indexed.length === 0 && !live) {
+			list.createDiv('today-empty').setText('No sessions');
+			return;
 		}
-		const totalWithRunning = totalMs + runningMs;
-
-		this.renderDateNav(section, viewDate, isToday, totalWithRunning);
-		this.renderProgressBar(section, totalWithRunning, viewDate);
-
-		if (this.timer.status === 'idle') {
-			const list = section.createDiv('today-breakdown');
-			if (indexed.length === 0) {
-				list.createDiv('today-empty').setText('No sessions');
-			} else {
-				const sorted = [...indexed].sort(
-					(a, b) => new Date(a.session.start).getTime() - new Date(b.session.start).getTime()
-				);
-				for (const { index, session } of sorted) {
-					this.renderSessionRow(list, index, session, dayStart, dayEnd);
-				}
-			}
+		const sorted = [...indexed].sort(
+			(a, b) => new Date(a.session.start).getTime() - new Date(b.session.start).getTime()
+		);
+		for (const { index, session } of sorted) {
+			this.renderSessionRow(list, index, session, range);
 		}
+		if (live) this.renderLiveRow(list, live.projectId, live.start, liveMs);
 	}
 
 	private renderDateNav(
 		section: HTMLElement,
 		viewDate: Date,
 		isToday: boolean,
-		totalWithRunning: number,
+		totalMs: number,
+		onNavigate: (delta: number) => void,
 	): void {
 		const header = section.createDiv('session-nav');
 
 		const prevBtn = header.createEl('button', { cls: 'session-nav-btn' });
+		prevBtn.setAttr('aria-label', 'Previous day');
 		setIcon(prevBtn, 'chevron-left');
-		prevBtn.onClickEvent(() => {
-			viewDate.setDate(viewDate.getDate() - 1);
-			this.timer.trigger('change');
-		});
+		prevBtn.onClickEvent(() => onNavigate(-1));
 
 		header.createSpan('session-nav-label').setText(this.getDateLabel(viewDate, isToday));
-		header.createSpan('session-nav-total').setText(formatHM(totalWithRunning));
+		header.createSpan('session-nav-total').setText(formatHM(totalMs));
 
 		const nextBtn = header.createEl('button', { cls: 'session-nav-btn' });
+		nextBtn.setAttr('aria-label', 'Next day');
 		setIcon(nextBtn, 'chevron-right');
-		if (isToday) {
-			nextBtn.disabled = true;
-			nextBtn.addClass('disabled');
-		}
-		nextBtn.onClickEvent(() => {
-			if (!isToday) {
-				viewDate.setDate(viewDate.getDate() + 1);
-				this.timer.trigger('change');
-			}
-		});
+		nextBtn.disabled = isToday;
+		nextBtn.onClickEvent(() => { if (!isToday) onNavigate(1); });
 	}
 
-	private renderProgressBar(section: HTMLElement, totalWithRunning: number, viewDate: Date): void {
+	private renderProgressBar(section: HTMLElement, totalMs: number, viewDate: Date): void {
 		const goalMs = this.plugin.settings.dailyGoalMins[viewDate.getDay()] * 60_000;
-		const progress = Math.min(totalWithRunning / goalMs, 1);
-		const progressBar = section.createDiv('today-progress');
-		const progressFill = progressBar.createDiv('today-progress-fill');
-		progressFill.style.width = `${progress * 100}%`;
+		const progress = goalMs > 0 ? Math.min(totalMs / goalMs, 1) : 0;
+		const bar = section.createDiv('today-progress');
+		bar.setAttr('aria-label', `${formatHM(totalMs)} of ${formatHM(goalMs)}`);
+		bar.createDiv('today-progress-fill').style.width = `${progress * 100}%`;
 	}
 
-	private renderSessionRow(container: HTMLElement, index: number, session: Session, dayStart: Date, dayEnd: Date): void {
-		const project = this.store.getProject(session.project);
+	private renderSessionRow(container: HTMLElement, index: number, session: Session, range: Range): void {
+		const { store } = this.plugin;
+		const project = store.getProject(session.project);
 		const rawStart = new Date(session.start);
 		const rawEnd = new Date(session.end);
-		const start = rawStart < dayStart ? dayStart : rawStart;
-		const end = rawEnd > dayEnd ? dayEnd : rawEnd;
-		const durationMs = end.getTime() - start.getTime();
+		const start = rawStart < range.start ? range.start : rawStart;
+		const end = rawEnd > range.end ? range.end : rawEnd;
 
 		const row = container.createDiv('session-row');
-
-		const dot = row.createSpan('today-dot');
-		dot.style.backgroundColor = project?.color ?? '#888';
+		row.createSpan('today-dot').style.backgroundColor = project?.color ?? '#888';
 
 		const content = row.createDiv('session-content');
 		const topRow = content.createDiv('session-top-row');
 		topRow.createSpan('today-name').setText(project?.name ?? session.project);
-		topRow.createSpan('today-time').setText(formatHM(durationMs));
+		topRow.createSpan('today-time').setText(formatHM(end.getTime() - start.getTime()));
 		content.createSpan('session-time-range').setText(`${formatHHMM(start)} – ${formatHHMM(end)}`);
 
 		const delBtn = row.createDiv('session-delete');
+		delBtn.setAttr('aria-label', 'Delete session');
 		setIcon(delBtn, 'x');
 		delBtn.onClickEvent(async (e) => {
 			e.stopPropagation();
 			const deleted = { ...session };
-			await this.store.deleteSession(index);
-			this.timer.trigger('change');
+			await store.deleteSession(index);
 			const notice = new Notice('Session deleted', 5000);
 			const undoBtn = notice.noticeEl.createEl('a', { text: 'Undo', cls: 'session-undo' });
 			undoBtn.onClickEvent(async () => {
-				await this.store.addSession(deleted);
-				this.timer.trigger('change');
+				await store.addSession(deleted);
 				notice.hide();
 			});
 		});
 
 		row.onClickEvent(() => {
-			new AddTimeModal(this.app, this.timer, this.store, { editIndex: index, session }).open();
+			new AddTimeModal(this.plugin.app, store, { editIndex: index, session }).open();
 		});
+	}
+
+	private renderLiveRow(container: HTMLElement, projectId: string, start: Date, ms: number): void {
+		const project = this.plugin.store.getProject(projectId);
+		const row = container.createDiv('session-row live');
+		row.createSpan('today-dot pulse').style.backgroundColor = project?.color ?? '#888';
+		const content = row.createDiv('session-content');
+		const topRow = content.createDiv('session-top-row');
+		topRow.createSpan('today-name').setText(project?.name ?? projectId);
+		topRow.createSpan('today-time').setText(formatHM(ms));
+		content.createSpan('session-time-range').setText(`${formatHHMM(start)} – now`);
 	}
 
 	private getDateLabel(viewDate: Date, isToday: boolean): string {
 		if (isToday) return 'Today';
-		const today = new Date();
-		today.setHours(0, 0, 0, 0);
-		const view = new Date(viewDate);
-		view.setHours(0, 0, 0, 0);
-		const diff = Math.round((today.getTime() - view.getTime()) / 86400000);
+		const diff = Math.round((dayRange(new Date()).start.getTime() - viewDate.getTime()) / 86400000);
 		if (diff === 1) return 'Yesterday';
-		return view.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+		return viewDate.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 	}
 }

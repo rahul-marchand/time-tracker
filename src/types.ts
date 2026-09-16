@@ -4,6 +4,7 @@ export interface Project {
 	color: string;
 	icon: string;
 	archived?: boolean;
+	weeklyTargetMins?: number;
 }
 
 export interface Session {
@@ -26,11 +27,13 @@ export interface TimerState {
 export interface TimeTrackerSettings {
 	timerState: TimerState;
 	dailyGoalMins: number[];
+	pillLabelChars: number;
 }
 
 export const DEFAULT_SETTINGS: TimeTrackerSettings = {
 	timerState: { status: 'idle', projectId: null, startTime: null },
 	dailyGoalMins: [240, 480, 480, 480, 480, 480, 240],
+	pillLabelChars: 10,
 };
 
 export const DEFAULT_PROJECTS: Project[] = [

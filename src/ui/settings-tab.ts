@@ -1,6 +1,7 @@
 import { App, PluginSettingTab, Setting, setIcon } from 'obsidian';
 import type TimeTrackerPlugin from '../main';
 import { Project, AVAILABLE_ICONS } from '../types';
+import { PROJECT_PALETTE } from '../utils';
 import { ConfirmModal } from './confirm-modal';
 
 export class SettingsTab extends PluginSettingTab {
@@ -19,45 +20,61 @@ export class SettingsTab extends PluginSettingTab {
 
 		const goalSetting = new Setting(containerEl)
 			.setName('Daily goal')
-			.setDesc('Target minutes per day (S M T W T F S)');
+			.setDesc('Hours per day, Sunday to Saturday');
 		const row = goalSetting.controlEl.createDiv('daily-goal-row');
 		const days = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
-		const goals = this.plugin.settings.dailyGoalMins;
 		for (let i = 0; i < 7; i++) {
 			const col = row.createDiv('daily-goal-col');
 			col.createEl('label', { text: days[i], cls: 'daily-goal-label' });
-			const input = col.createEl('input', { cls: 'daily-goal-input' });
-			input.type = 'number';
+			const input = col.createEl('input', { cls: 'daily-goal-input', type: 'number' });
 			input.min = '0';
-			input.value = String(goals[i]);
-			const idx = i;
+			input.step = '0.5';
+			input.value = String(this.plugin.settings.dailyGoalMins[i] / 60);
 			input.addEventListener('change', async () => {
-				this.plugin.settings.dailyGoalMins[idx] = parseInt(input.value) || 0;
+				this.plugin.settings.dailyGoalMins[i] = Math.max(Math.round((parseFloat(input.value) || 0) * 60), 0);
 				await this.plugin.saveSettings();
 			});
 		}
 
+		new Setting(containerEl)
+			.setName('Pill label length')
+			.setDesc('Longer project names are shortened with … on the timer pills; the full name shows on hover.')
+			.addText(text => {
+				text.inputEl.type = 'number';
+				text.inputEl.min = '4';
+				text.inputEl.addClass('target-input');
+				text.setValue(String(this.plugin.settings.pillLabelChars));
+				text.inputEl.addEventListener('change', async () => {
+					const n = parseInt(text.getValue());
+					if (n >= 4) {
+						this.plugin.settings.pillLabelChars = n;
+						await this.plugin.saveSettings();
+						this.plugin.store.trigger('change');
+					}
+				});
+			});
+
 		containerEl.createEl('h2', { text: 'Projects' });
+		containerEl.createEl('p', { text: 'Weekly target in hours drives the week view: bar fill, pace marker and zero warnings.', cls: 'setting-item-description' });
 
 		for (const project of this.plugin.store.projects) {
 			this.renderProject(containerEl, project);
 		}
 
-		new Setting(containerEl)
-			.addButton(btn => {
-				btn.setButtonText('Add Project');
-				btn.setCta();
-				btn.onClick(async () => {
-					const id = `project-${Date.now()}`;
-					await this.plugin.store.addProject({
-						id,
-						name: 'New Project',
-						color: this.randomColor(),
-						icon: 'folder',
-					});
-					this.display();
+		new Setting(containerEl).addButton(btn => {
+			btn.setButtonText('Add project');
+			btn.setCta();
+			btn.onClick(async () => {
+				const n = this.plugin.store.projects.length + this.plugin.store.archivedProjects.length;
+				await this.plugin.store.addProject({
+					id: `project-${Date.now()}`,
+					name: 'New project',
+					color: PROJECT_PALETTE[n % PROJECT_PALETTE.length],
+					icon: 'folder',
 				});
+				this.display();
 			});
+		});
 
 		const archived = this.plugin.store.archivedProjects;
 		if (archived.length > 0) {
@@ -72,10 +89,7 @@ export class SettingsTab extends PluginSettingTab {
 		const setting = new Setting(container);
 		setting.settingEl.addClass('archived-project');
 		setting.setName(project.name);
-
-		const iconSpan = setting.nameEl.createSpan({ cls: 'project-icon' });
-		setIcon(iconSpan, project.icon || 'folder');
-		setting.nameEl.prepend(iconSpan);
+		setIcon(setting.nameEl.createSpan({ cls: 'project-icon' }), project.icon || 'folder');
 
 		setting.addButton(btn => {
 			btn.setButtonText('Restore');
@@ -105,19 +119,15 @@ export class SettingsTab extends PluginSettingTab {
 		});
 	}
 
+	// Saves on change/blur, not per keystroke, so the data file is rewritten once per edit
 	private renderProject(container: HTMLElement, project: Project): void {
 		const setting = new Setting(container);
-
-		setting.setName(project.name);
-
+		setting.settingEl.addClass('project-setting');
 		const iconSpan = setting.nameEl.createSpan({ cls: 'project-icon' });
 		setIcon(iconSpan, project.icon || 'folder');
-		setting.nameEl.prepend(iconSpan);
 
 		setting.addDropdown(dropdown => {
-			for (const icon of AVAILABLE_ICONS) {
-				dropdown.addOption(icon, icon);
-			}
+			for (const icon of AVAILABLE_ICONS) dropdown.addOption(icon, icon);
 			dropdown.setValue(project.icon || 'folder');
 			dropdown.onChange(async v => {
 				await this.plugin.store.updateProject(project.id, { icon: v });
@@ -127,19 +137,33 @@ export class SettingsTab extends PluginSettingTab {
 		});
 
 		setting.addText(text => {
+			text.setPlaceholder('Name');
 			text.setValue(project.name);
-			text.onChange(async v => {
-				await this.plugin.store.updateProject(project.id, { name: v });
-				setting.setName(v);
+			text.inputEl.addClass('project-name-input');
+			text.inputEl.addEventListener('change', async () => {
+				const v = text.getValue().trim();
+				if (v) await this.plugin.store.updateProject(project.id, { name: v });
 			});
+		});
+
+		const wrap = setting.controlEl.createSpan('target-wrap');
+		const target = wrap.createEl('input', { cls: 'target-input', type: 'number' });
+		target.min = '0';
+		target.step = '0.5';
+		target.placeholder = '–';
+		target.setAttr('aria-label', 'Weekly target, hours');
+		if (project.weeklyTargetMins) target.value = String(project.weeklyTargetMins / 60);
+		target.addEventListener('change', async () => {
+			const h = parseFloat(target.value);
+			await this.plugin.store.updateProject(project.id, { weeklyTargetMins: h > 0 ? Math.round(h * 60) : undefined });
 		});
 
 		setting.addText(text => {
 			text.inputEl.type = 'color';
 			text.inputEl.addClass('color-input');
 			text.setValue(project.color);
-			text.onChange(async v => {
-				await this.plugin.store.updateProject(project.id, { color: v });
+			text.inputEl.addEventListener('change', async () => {
+				await this.plugin.store.updateProject(project.id, { color: text.getValue() });
 			});
 		});
 
@@ -153,10 +177,5 @@ export class SettingsTab extends PluginSettingTab {
 				});
 			});
 		}
-	}
-
-	private randomColor(): string {
-		const hue = Math.floor(Math.random() * 360);
-		return `hsl(${hue}, 60%, 50%)`;
 	}
 }

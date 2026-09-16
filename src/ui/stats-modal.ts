@@ -1,63 +1,45 @@
 import { App, Modal } from 'obsidian';
 import { Store } from '../store';
-import { Session } from '../types';
-import { formatHM, groupByProject } from '../utils';
+import { formatHM, groupByProject, dayRange, weekRange, Range } from '../utils';
 
 export class StatsModal extends Modal {
-	private store: Store;
-
-	constructor(app: App, store: Store) {
+	constructor(app: App, private store: Store) {
 		super(app);
-		this.store = store;
 	}
 
 	onOpen(): void {
 		const { contentEl } = this;
 		contentEl.empty();
 		contentEl.addClass('time-tracker-stats-modal');
-
 		contentEl.createEl('h2', { text: 'Time Stats' });
-
-		const todayStart = new Date();
-		todayStart.setHours(0, 0, 0, 0);
-		const todayEnd = new Date(todayStart);
-		todayEnd.setDate(todayEnd.getDate() + 1);
-
 		const now = new Date();
-		const dayOfWeek = (now.getDay() + 6) % 7;
-		const weekStart = new Date(now);
-		weekStart.setDate(now.getDate() - dayOfWeek);
-		weekStart.setHours(0, 0, 0, 0);
-		const weekEnd = new Date(weekStart);
-		weekEnd.setDate(weekEnd.getDate() + 7);
-
-		this.renderSection(contentEl, 'Today', this.store.getTodaySessions(), todayStart, todayEnd);
-		this.renderSection(contentEl, 'This Week', this.store.getWeekSessions(), weekStart, weekEnd);
+		this.renderSection(contentEl, 'Today', dayRange(now));
+		this.renderSection(contentEl, 'This Week', weekRange(now));
 	}
 
-	private renderSection(el: HTMLElement, title: string, sessions: Session[], rangeStart: Date, rangeEnd: Date): void {
-		const section = el.createDiv('stats-section');
+	private renderSection(el: HTMLElement, title: string, range: Range): void {
+		const section = el.createDiv('stats-modal-section');
 		section.createEl('h3', { text: title });
 
+		const sessions = this.store.getSessionsInRange(range);
 		const byProject = groupByProject(sessions);
-		const total = this.store.getTotalTimeInRange(sessions, rangeStart, rangeEnd);
-
 		if (Object.keys(byProject).length === 0) {
-			section.createEl('p', { text: 'No time tracked', cls: 'muted' });
+			section.createEl('p', { text: 'No time tracked', cls: 'stats-modal-muted' });
 			return;
 		}
 
-		const list = section.createEl('ul', { cls: 'stats-list' });
-		for (const [projectId, projectSessions] of Object.entries(byProject)) {
-			const project = this.store.getProject(projectId);
-			const time = this.store.getTotalTimeInRange(projectSessions, rangeStart, rangeEnd);
+		const list = section.createEl('ul', { cls: 'stats-modal-list' });
+		const rows = Object.entries(byProject)
+			.map(([id, s]) => ({ id, time: this.store.getTotalTimeInRange(s, range) }))
+			.sort((a, b) => b.time - a.time);
+		for (const { id, time } of rows) {
+			const project = this.store.getProject(id);
 			const li = list.createEl('li');
-			const dot = li.createSpan({ cls: 'color-dot' });
-			dot.style.backgroundColor = project?.color ?? '#888';
-			li.createSpan({ text: `${project?.name ?? projectId}: ${formatHM(time)}` });
+			li.createSpan({ cls: 'color-dot' }).style.backgroundColor = project?.color ?? '#888';
+			li.createSpan({ text: project?.name ?? id });
+			li.createSpan({ text: formatHM(time), cls: 'stats-modal-time' });
 		}
-
-		section.createEl('p', { text: `Total: ${formatHM(total)}`, cls: 'stats-total' });
+		section.createEl('p', { text: `Total: ${formatHM(this.store.getTotalTimeInRange(sessions, range))}`, cls: 'stats-modal-total' });
 	}
 
 	onClose(): void {

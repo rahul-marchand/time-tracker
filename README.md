@@ -7,6 +7,7 @@ Simple time tracking for Obsidian.
 - Start/stop timer by project
 - Quick-add minutes with + button
 - Weekly/monthly analytics with stacked bar chart
+- Weekly hour target per project (Settings → h/wk); week view shows time / target, a pace marker, and flags projects at zero
 - Streak tracking (consecutive days above target)
 
 ## Install

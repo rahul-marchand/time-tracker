@@ -1,11 +1,21 @@
 import { Store } from '../store';
 import { Session } from '../types';
-import { formatHM, groupByProject, clampedDuration } from '../utils';
+import {
+	formatHM, formatHours, groupByProject, dayRange, weekRange, monthRange, daysIn, elapsedFraction, Range,
+} from '../utils';
 
 type AnalyticsMode = 'week' | 'month';
 
+interface Period {
+	mode: AnalyticsMode;
+	range: Range;
+	sessions: Session[];
+	totalMs: number;
+}
+
 interface DayData {
 	label: string;
+	tooltip: string;
 	total: number;
 	isToday: boolean;
 	projects: { color: string; time: number }[];
@@ -15,189 +25,182 @@ export class AnalyticsSection {
 	constructor(private store: Store) {}
 
 	render(container: HTMLElement, mode: AnalyticsMode, onModeChange: (m: AnalyticsMode) => void): void {
+		const now = new Date();
+		const range = mode === 'week' ? weekRange(now) : monthRange(now);
+		const sessions = this.store.getSessionsInRange(range);
+		const period: Period = { mode, range, sessions, totalMs: this.store.getTotalTimeInRange(sessions, range) };
+
 		const view = container.createDiv('analytics-view');
-		this.renderChart(view, mode, onModeChange);
-		this.renderStats(view, mode);
-		this.renderProjectSummary(view, mode);
+		this.renderChart(view, period, onModeChange);
+		this.renderStats(view, period);
+		this.renderProjectSummary(view, period);
 	}
 
-	private renderChart(container: HTMLElement, mode: AnalyticsMode, onModeChange: (m: AnalyticsMode) => void): void {
+	private renderChart(container: HTMLElement, p: Period, onModeChange: (m: AnalyticsMode) => void): void {
 		const section = container.createDiv('analytics-section');
-
-		const { start: periodStart, end: periodEnd } = this.getPeriodRange(mode);
-		const sessions = this.getSessions(mode);
-		const totalMs = this.store.getTotalTimeInRange(sessions, periodStart, periodEnd);
-
 		const header = section.createDiv('analytics-header');
 
-		const toggle = header.createDiv('analytics-toggle');
-		const weekBtn = toggle.createEl('button', { cls: 'toggle-btn', text: 'W' });
-		if (mode === 'week') weekBtn.addClass('active');
-		weekBtn.onClickEvent(() => onModeChange('week'));
+		const periodName = p.mode === 'week' ? 'This week' : p.range.start.toLocaleDateString(undefined, { month: 'long' });
+		header.createSpan('analytics-label').setText(periodName);
 
-		const monthBtn = toggle.createEl('button', { cls: 'toggle-btn', text: 'M' });
-		if (mode === 'month') monthBtn.addClass('active');
-		monthBtn.onClickEvent(() => onModeChange('month'));
+		const right = header.createDiv('analytics-header-right');
+		const toggle = right.createDiv('analytics-toggle');
+		for (const [m, label] of [['week', 'W'], ['month', 'M']] as const) {
+			const btn = toggle.createEl('button', { cls: 'toggle-btn', text: label });
+			btn.setAttr('aria-label', m === 'week' ? 'This week' : 'This month');
+			if (p.mode === m) btn.addClass('active');
+			btn.onClickEvent(() => onModeChange(m));
+		}
+		right.createSpan('analytics-total').setText(formatHM(p.totalMs));
 
-		header.createSpan('analytics-total').setText(formatHM(totalMs));
-
-		const dailyData = mode === 'week' ? this.getWeekDailyData() : this.getMonthDailyData();
-		const maxMs = Math.max(...dailyData.map(d => d.total), 1);
+		const days = this.getDailyData(p);
+		const maxMs = Math.max(...days.map(d => d.total), 1);
 
 		const chart = section.createDiv('week-chart');
-		if (mode === 'month') chart.addClass('week-chart--month');
+		if (p.mode === 'month') chart.addClass('week-chart--month');
 
-		for (const day of dailyData) {
+		for (const day of days) {
 			const col = chart.createDiv('week-col');
+			if (day.isToday) col.addClass('today');
 
 			const bar = col.createDiv('week-bar');
-			bar.dataset.tooltip = formatHM(day.total);
+			bar.dataset.tooltip = day.tooltip;
 
 			const stack = bar.createDiv('week-bar-stack');
 			const heightPercent = (day.total / maxMs) * 100;
 			stack.style.height = `${Math.max(heightPercent, day.total > 0 ? 4 : 2)}%`;
-
-			if (day.total > 0) {
-				for (const seg of day.projects) {
-					const segment = stack.createDiv('stack-segment');
-					segment.style.height = `${(seg.time / day.total) * 100}%`;
-					segment.style.backgroundColor = seg.color;
-				}
+			for (const seg of day.projects) {
+				const segment = stack.createDiv('stack-segment');
+				segment.style.height = `${(seg.time / day.total) * 100}%`;
+				segment.style.backgroundColor = seg.color;
 			}
 
-			const lbl = col.createDiv('week-label');
-			if (day.isToday) lbl.addClass('today');
-			lbl.setText(day.label);
+			col.createDiv('week-label').setText(day.label);
 		}
 	}
 
-	private renderStats(container: HTMLElement, mode: AnalyticsMode): void {
-		const section = container.createDiv('analytics-section stats-section');
-
-		const { start: periodStart, end: periodEnd } = this.getPeriodRange(mode);
-		const sessions = this.getSessions(mode);
-		const totalMs = this.store.getTotalTimeInRange(sessions, periodStart, periodEnd);
-		const today = new Date();
-		const daysInPeriod = mode === 'week'
-			? ((today.getDay() + 6) % 7) + 1
-			: today.getDate();
-		const avgMs = totalMs / daysInPeriod;
+	private renderStats(container: HTMLElement, p: Period): void {
+		const section = container.createDiv('analytics-section analytics-stats');
+		const elapsedDays = elapsedFraction(p.range) * daysIn(p.range);
+		const avgMs = elapsedDays > 0 ? p.totalMs / elapsedDays : 0;
 
 		const stats = section.createDiv('stats-grid');
-
 		const avgStat = stats.createDiv('stat-item');
 		avgStat.createDiv('stat-value').setText(formatHM(avgMs));
-		avgStat.createDiv('stat-label').setText('Daily Avg');
+		avgStat.createDiv('stat-label').setText('Daily avg');
 	}
 
-	private renderProjectSummary(container: HTMLElement, mode: AnalyticsMode): void {
+	// Week mode measures against each active project's weekly target; month mode shows share of total.
+	private renderProjectSummary(container: HTMLElement, p: Period): void {
 		const section = container.createDiv('analytics-section');
-
 		const header = section.createDiv('analytics-header');
-		header.createSpan('analytics-label').setText('By Project');
+		header.createSpan('analytics-label').setText('By project');
 
-		const { start: periodStart, end: periodEnd } = this.getPeriodRange(mode);
-		const sessions = this.getSessions(mode);
-		const totalMs = this.store.getTotalTimeInRange(sessions, periodStart, periodEnd);
+		const byProject = groupByProject(p.sessions);
+		const timeFor = (id: string) =>
+			byProject[id] ? this.store.getTotalTimeInRange(byProject[id], p.range) : 0;
 
-		if (sessions.length === 0) {
+		const targetById = new Map<string, number>();
+		if (p.mode === 'week') {
+			for (const proj of this.store.projects) {
+				if (proj.weeklyTargetMins) targetById.set(proj.id, proj.weeklyTargetMins * 60000);
+			}
+		}
+		const useTargets = targetById.size > 0;
+
+		if (useTargets) {
+			const targetTotal = [...targetById.values()].reduce((a, b) => a + b, 0);
+			const trackedTotal = [...targetById.keys()].reduce((a, id) => a + timeFor(id), 0);
+			const total = header.createSpan('analytics-total');
+			total.setText(formatHM(trackedTotal));
+			total.createSpan('breakdown-target').setText(formatHours(targetTotal));
+		} else if (p.sessions.length === 0) {
 			section.createDiv('analytics-empty').setText('No data');
 			return;
 		}
 
-		const byProject = groupByProject(sessions);
-		const breakdown = section.createDiv('project-breakdown');
-
-		const sorted = Object.entries(byProject)
-			.map(([id, s]) => ({ id, time: this.store.getTotalTimeInRange(s, periodStart, periodEnd) }))
+		const ids = new Set<string>([...Object.keys(byProject), ...targetById.keys()]);
+		const rows = [...ids]
+			.map(id => ({ id, time: timeFor(id), target: targetById.get(id) ?? 0 }))
+			.filter(r => r.time > 0 || r.target > 0)
 			.sort((a, b) => b.time - a.time);
 
-		for (const { id, time } of sorted) {
-			const project = this.store.getProject(id);
-			const percent = totalMs > 0 ? (time / totalMs) * 100 : 0;
+		const pace = elapsedFraction(p.range);
+		const dayIdx = (new Date().getDay() + 6) % 7; // 0 = Monday
+		const breakdown = section.createDiv('project-breakdown');
 
+		for (const { id, time, target } of rows) {
+			const project = this.store.getProject(id);
+			const color = project?.color ?? '#888';
 			const row = breakdown.createDiv('breakdown-row');
+
 			const info = row.createDiv('breakdown-info');
-			const dot = info.createSpan('breakdown-dot');
-			dot.style.backgroundColor = project?.color ?? '#888';
+			info.createSpan('breakdown-dot').style.backgroundColor = color;
 			info.createSpan('breakdown-name').setText(project?.name ?? id);
 			info.createSpan('breakdown-time').setText(formatHM(time));
+			if (target > 0) info.createSpan('breakdown-target').setText(formatHours(target));
 
 			const barContainer = row.createDiv('breakdown-bar');
 			const barFill = barContainer.createDiv('breakdown-bar-fill');
+			const percent = target > 0
+				? Math.min((time / target) * 100, 100)
+				: p.totalMs > 0 ? (time / p.totalMs) * 100 : 0;
 			barFill.style.width = `${percent}%`;
-			barFill.style.backgroundColor = project?.color ?? '#888';
+			barFill.style.backgroundColor = color;
+
+			if (target > 0) {
+				barContainer.createDiv('breakdown-pace').style.left = `${pace * 100}%`;
+				// Red only once the week is well under way; before that a zero is just a quiet row.
+				if (time >= target) row.addClass('breakdown-row--met');
+				else if (time === 0 && dayIdx >= 2) row.addClass('breakdown-row--zero');
+				else if (dayIdx >= 1 && time < target * pace * 0.5) row.addClass('breakdown-row--behind');
+			}
 		}
 	}
 
-	private getSessions(mode: AnalyticsMode): Session[] {
-		return mode === 'week' ? this.store.getWeekSessions() : this.store.getMonthSessions();
-	}
-
-	private getPeriodRange(mode: AnalyticsMode): { start: Date; end: Date } {
-		const now = new Date();
-		if (mode === 'week') {
-			const dayOfWeek = (now.getDay() + 6) % 7;
-			const start = new Date(now);
-			start.setDate(now.getDate() - dayOfWeek);
-			start.setHours(0, 0, 0, 0);
-			const end = new Date(start);
-			end.setDate(end.getDate() + 7);
-			return { start, end };
-		}
-		const start = new Date(now.getFullYear(), now.getMonth(), 1);
-		const end = new Date(now.getFullYear(), now.getMonth() + 1, 1);
-		return { start, end };
-	}
-
-	private getWeekDailyData(): DayData[] {
-		const today = new Date();
-		const dayOfWeek = (today.getDay() + 6) % 7;
-		const days = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
+	private getDailyData(p: Period): DayData[] {
+		const today = dayRange(new Date()).start.getTime();
+		const weekLabels = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
 		const result: DayData[] = [];
+		const n = daysIn(p.range);
 
-		for (let i = 0; i < 7; i++) {
-			const date = new Date(today);
-			date.setDate(today.getDate() - dayOfWeek + i);
-			date.setHours(0, 0, 0, 0);
-			const nextDate = new Date(date);
-			nextDate.setDate(date.getDate() + 1);
+		for (let i = 0; i < n; i++) {
+			const date = new Date(p.range.start);
+			date.setDate(date.getDate() + i);
+			const day = dayRange(date);
+			const sessions = this.store.getSessionsInRange(day);
+			const total = this.store.getTotalTimeInRange(sessions, day);
+			const isToday = day.start.getTime() === today;
 
-			const sessions = this.store.getSessionsInRange(date, nextDate);
-			const total = this.store.getTotalTimeInRange(sessions, date, nextDate);
-			const projects = this.getProjectBreakdown(sessions, date, nextDate);
-			result.push({ label: days[i], total, isToday: i === dayOfWeek, projects });
+			let label: string;
+			if (p.mode === 'week') {
+				label = weekLabels[i];
+			} else {
+				const d = i + 1;
+				const isTick = d === 1 || d % 5 === 0;
+				const nextToToday = isToday ? false : Math.abs(day.start.getTime() - today) <= 86400000;
+				label = isToday || (isTick && !nextToToday) ? String(d) : '';
+			}
+			const dateLabel = date.toLocaleDateString(undefined, p.mode === 'week'
+				? { weekday: 'short', day: 'numeric' }
+				: { day: 'numeric', month: 'short' });
+
+			result.push({
+				label,
+				tooltip: `${dateLabel} · ${formatHM(total)}`,
+				total,
+				isToday,
+				projects: this.getProjectBreakdown(sessions, day),
+			});
 		}
 		return result;
 	}
 
-	private getMonthDailyData(): DayData[] {
-		const today = new Date();
-		const daysInMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate();
-		const result: DayData[] = [];
-
-		for (let i = 1; i <= daysInMonth; i++) {
-			const date = new Date(today.getFullYear(), today.getMonth(), i);
-			const nextDate = new Date(today.getFullYear(), today.getMonth(), i + 1);
-
-			const sessions = this.store.getSessionsInRange(date, nextDate);
-			const total = this.store.getTotalTimeInRange(sessions, date, nextDate);
-			const projects = this.getProjectBreakdown(sessions, date, nextDate);
-			const isToday = i === today.getDate();
-			const isTick = i === 1 || i % 5 === 0;
-			const nextToToday = Math.abs(i - today.getDate()) === 1;
-			const label = isToday || (isTick && !nextToToday) ? i.toString() : '';
-			result.push({ label, total, isToday, projects });
-		}
-		return result;
-	}
-
-	private getProjectBreakdown(sessions: Session[], start: Date, end: Date): { color: string; time: number }[] {
-		const byProject = groupByProject(sessions);
-		return Object.entries(byProject)
+	private getProjectBreakdown(sessions: Session[], range: Range): { color: string; time: number }[] {
+		return Object.entries(groupByProject(sessions))
 			.map(([id, s]) => ({
 				color: this.store.getProject(id)?.color ?? '#888',
-				time: this.store.getTotalTimeInRange(s, start, end)
+				time: this.store.getTotalTimeInRange(s, range),
 			}))
 			.sort((a, b) => b.time - a.time);
 	}

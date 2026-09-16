@@ -1,52 +1,36 @@
-import { EventRef, Plugin } from 'obsidian';
-import { Timer } from '../timer';
-import { Store } from '../store';
+import { setIcon } from 'obsidian';
+import type TimeTrackerPlugin from '../main';
 import { formatHMS } from '../utils';
 
 export class StatusBar {
 	private el: HTMLElement;
-	private timer: Timer;
-	private store: Store;
-	private interval: number | null = null;
-	private changeRef: EventRef;
+	private textEl: HTMLElement;
 
-	constructor(plugin: Plugin, timer: Timer, store: Store) {
-		this.timer = timer;
-		this.store = store;
+	constructor(private plugin: TimeTrackerPlugin) {
 		this.el = plugin.addStatusBarItem();
 		this.el.addClass('time-tracker-status');
-		this.el.onClickEvent(() => this.onClick());
-		this.changeRef = this.timer.on('change', () => this.render());
+		this.el.setAttr('aria-label', 'Time Tracker');
+		setIcon(this.el.createSpan('time-tracker-status-icon'), 'clock');
+		this.textEl = this.el.createSpan('time-tracker-status-text');
+		this.el.onClickEvent(() => plugin.activateSidebar());
+
+		plugin.registerEvent(plugin.timer.on('change', () => this.render()));
+		plugin.registerEvent(plugin.store.on('change', () => this.render()));
+		plugin.registerInterval(window.setInterval(() => {
+			if (plugin.timer.status === 'running') this.render();
+		}, 1000));
 		this.render();
-		this.startInterval();
-	}
-
-	private startInterval(): void {
-		this.interval = window.setInterval(() => {
-			if (this.timer.status === 'running') this.render();
-		}, 1000);
-	}
-
-	destroy(): void {
-		if (this.interval) window.clearInterval(this.interval);
-		this.timer.offref(this.changeRef);
 	}
 
 	private render(): void {
-		const { status, projectId } = this.timer;
-		if (status === 'idle') {
-			this.el.setText('⏱ No timer');
+		const { timer, store } = this.plugin;
+		if (timer.status === 'idle') {
+			this.textEl.setText('');
 			this.el.removeClass('is-running');
-		} else {
-			const project = this.store.getProject(projectId!);
-			const name = project?.name ?? projectId;
-			const time = formatHMS(this.timer.elapsed);
-			this.el.setText(`⏱ ${name} ${time}`);
-			this.el.addClass('is-running');
+			return;
 		}
-	}
-
-	private onClick(): void {
-		this.timer.trigger('status-bar-click');
+		const name = store.getProject(timer.projectId!)?.name ?? timer.projectId;
+		this.textEl.setText(`${name} ${formatHMS(timer.elapsed)}`);
+		this.el.addClass('is-running');
 	}
 }
