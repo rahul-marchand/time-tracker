@@ -465,6 +465,11 @@
 	height: 12px;
 }
 
+.session-delete--spacer {
+	pointer-events: none;
+	visibility: hidden;
+}
+
 .session-undo {
 	margin-left: 8px;
 	cursor: pointer;

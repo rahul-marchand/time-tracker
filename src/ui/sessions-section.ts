@@ -115,6 +115,7 @@ export class SessionsSection {
 		topRow.createSpan('today-name').setText(project?.name ?? projectId);
 		topRow.createSpan('today-time').setText(formatHM(ms));
 		content.createSpan('session-time-range').setText(`${formatHHMM(start)} – now`);
+		row.createDiv('session-delete session-delete--spacer'); // keeps columns aligned with finished rows
 	}
 
 	private getDateLabel(viewDate: Date, isToday: boolean): string {
