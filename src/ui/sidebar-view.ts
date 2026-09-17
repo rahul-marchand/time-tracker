@@ -1,5 +1,6 @@
 import { ItemView, WorkspaceLeaf } from 'obsidian';
 import type TimeTrackerPlugin from '../main';
+import { formatHM, formatHMS } from '../utils';
 import { TimerSection } from './timer-section';
 import { SessionsSection } from './sessions-section';
 import { AnalyticsSection } from './analytics-section';
@@ -33,14 +34,32 @@ export class SidebarView extends ItemView {
 		const { timer, store } = this.plugin;
 		this.registerEvent(timer.on('change', () => this.render()));
 		this.registerEvent(store.on('change', () => this.render()));
-		this.registerInterval(window.setInterval(() => {
-			if (timer.status === 'running') this.render();
-		}, 1000));
+		this.registerInterval(window.setInterval(() => this.tick(), 1000));
 		// Pace marker and daily average drift with the clock; a redraw every 5 min is plenty
 		this.registerInterval(window.setInterval(() => {
 			if (this.activeTab === 'analytics' && timer.status !== 'running') this.render();
 		}, 5 * 60_000));
 		this.render();
+	}
+
+	// Updates the ticking numbers in place; a full render each second would swallow clicks mid-press
+	private tick(): void {
+		const { timer } = this.plugin;
+		if (timer.status !== 'running' || this.activeTab !== 'timer') return;
+		const el = this.contentEl;
+		el.querySelector('.timer-display')?.setText(formatHMS(timer.elapsed));
+
+		const live = el.querySelector<HTMLElement>('.session-row.live');
+		const nav = el.querySelector<HTMLElement>('.session-nav');
+		const bar = el.querySelector<HTMLElement>('.today-progress');
+		if (!live || !nav || !bar) return;
+		const liveMs = Date.now() - Number(live.dataset.startMs);
+		const totalMs = Number(nav.dataset.baseMs) + liveMs;
+		live.querySelector('.live-time')?.setText(formatHM(liveMs));
+		nav.querySelector('.session-nav-total')?.setText(formatHM(totalMs));
+		const goalMs = Number(bar.dataset.goalMs);
+		const fill = bar.querySelector<HTMLElement>('.today-progress-fill');
+		if (fill) fill.style.width = `${goalMs > 0 ? Math.min(totalMs / goalMs, 1) * 100 : 0}%`;
 	}
 
 	private render(): void {

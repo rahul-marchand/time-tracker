@@ -39,23 +39,23 @@ export class Timer extends Events {
 			await this.stop();
 		}
 		this.state = { status: 'running', projectId, startTime: new Date().toISOString() };
-		await this.persistState(this.state);
 		this.trigger('change');
+		await this.persistState(this.state);
 	}
 
 	async stop(): Promise<void> {
 		const { status, projectId, startTime } = this.state;
 		if (status === 'idle' || !projectId || !startTime) return;
-		// Flip state before awaiting so a second call during the save is a no-op
+		// Flip state and notify before awaiting, so the UI responds at once and a second call is a no-op
 		this.state = { status: 'idle', projectId: null, startTime: null };
-		await this.store.addSession({ project: projectId, start: startTime, end: new Date().toISOString() });
-		await this.persistState(this.state);
 		this.trigger('change');
+		await this.persistState(this.state);
+		await this.store.addSession({ project: projectId, start: startTime, end: new Date().toISOString() });
 	}
 
 	async discard(): Promise<void> {
 		this.state = { status: 'idle', projectId: null, startTime: null };
-		await this.persistState(this.state);
 		this.trigger('change');
+		await this.persistState(this.state);
 	}
 }

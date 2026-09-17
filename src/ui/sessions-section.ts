@@ -5,6 +5,8 @@ import { formatHM, formatHHMM, dayRange, Range } from '../utils';
 import { AddTimeModal } from './add-time-modal';
 
 export class SessionsSection {
+	private liveMs = 0;
+
 	constructor(private plugin: TimeTrackerPlugin) {}
 
 	render(container: HTMLElement, viewDate: Date, isToday: boolean, onNavigate: (delta: number) => void): void {
@@ -19,6 +21,7 @@ export class SessionsSection {
 			? { start: new Date(Math.max(timer.startTime.getTime(), range.start.getTime())), projectId: timer.projectId! }
 			: null;
 		const liveMs = live ? Date.now() - live.start.getTime() : 0;
+		this.liveMs = liveMs;
 
 		this.renderDateNav(section, viewDate, isToday, totalMs + liveMs, onNavigate);
 		this.renderProgressBar(section, totalMs + liveMs, viewDate);
@@ -53,6 +56,7 @@ export class SessionsSection {
 
 		header.createSpan('session-nav-label').setText(this.getDateLabel(viewDate, isToday));
 		header.createSpan('session-nav-total').setText(formatHM(totalMs));
+		header.dataset.baseMs = String(totalMs - this.liveMs);
 
 		const nextBtn = header.createEl('button', { cls: 'session-nav-btn' });
 		nextBtn.setAttr('aria-label', 'Next day');
@@ -65,7 +69,7 @@ export class SessionsSection {
 		const goalMs = this.plugin.settings.dailyGoalMins[viewDate.getDay()] * 60_000;
 		const progress = goalMs > 0 ? Math.min(totalMs / goalMs, 1) : 0;
 		const bar = section.createDiv('today-progress');
-		bar.setAttr('aria-label', `${formatHM(totalMs)} of ${formatHM(goalMs)}`);
+		bar.dataset.goalMs = String(goalMs);
 		bar.createDiv('today-progress-fill').style.width = `${progress * 100}%`;
 	}
 
@@ -110,10 +114,11 @@ export class SessionsSection {
 		const project = this.plugin.store.getProject(projectId);
 		const row = container.createDiv('session-row live');
 		row.createSpan('today-dot pulse').style.backgroundColor = project?.color ?? '#888';
+		row.dataset.startMs = String(start.getTime());
 		const content = row.createDiv('session-content');
 		const topRow = content.createDiv('session-top-row');
 		topRow.createSpan('today-name').setText(project?.name ?? projectId);
-		topRow.createSpan('today-time').setText(formatHM(ms));
+		topRow.createSpan('today-time live-time').setText(formatHM(ms));
 		content.createSpan('session-time-range').setText(`${formatHHMM(start)} – now`);
 		row.createDiv('session-delete session-delete--spacer'); // keeps columns aligned with finished rows
 	}
